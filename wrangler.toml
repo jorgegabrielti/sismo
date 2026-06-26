@@ -1,6 +1,5 @@
 name = "sismo"
 compatibility_date = "2025-01-01"
-main = ""
 
 # Serve a pasta web/ como assets estáticos
 [assets]
