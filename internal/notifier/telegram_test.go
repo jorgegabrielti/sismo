@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -14,14 +13,50 @@ import (
 	"sismo/internal/usgs"
 )
 
-func TestTelegramNotifier_Notify_MultiUser(t *testing.T) {
-	// Cria banco temporário
-	dbPath := filepath.Join(t.TempDir(), "users.db")
-	userDB, err := db.NewDatabase(dbPath)
-	if err != nil {
-		t.Fatalf("Falha ao inicializar o banco nos testes: %v", err)
+// MockUserStore implementa a interface db.UserStore em memória para os testes unitários
+type MockUserStore struct {
+	users map[int64]db.UserPreference
+}
+
+func NewMockUserStore() *MockUserStore {
+	return &MockUserStore{users: make(map[int64]db.UserPreference)}
+}
+
+func (m *MockUserStore) SaveUser(pref db.UserPreference) error {
+	m.users[pref.ChatID] = pref
+	return nil
+}
+
+func (m *MockUserStore) GetUser(chatID int64) (db.UserPreference, bool) {
+	pref, exists := m.users[chatID]
+	return pref, exists
+}
+
+func (m *MockUserStore) DeleteUser(chatID int64) error {
+	delete(m.users, chatID)
+	return nil
+}
+
+func (m *MockUserStore) GetAllUsers() []db.UserPreference {
+	var list []db.UserPreference
+	for _, u := range m.users {
+		list = append(list, u)
 	}
-	defer userDB.Close() // Fecha o banco no final para liberar travas de arquivo no Windows
+	return list
+}
+
+func (m *MockUserStore) GetUsersForMagnitude(mag float64) []db.UserPreference {
+	var list []db.UserPreference
+	for _, u := range m.users {
+		if u.MinMagnitude <= mag {
+			list = append(list, u)
+		}
+	}
+	return list
+}
+
+func TestTelegramNotifier_Notify_MultiUser(t *testing.T) {
+	userDB := NewMockUserStore()
 
 	// Cadastra dois usuários com preferências de magnitudes diferentes
 	userDB.SaveUser(db.UserPreference{ChatID: 111, MinMagnitude: 4.0, RegisteredAt: time.Now()})
@@ -65,7 +100,7 @@ func TestTelegramNotifier_Notify_MultiUser(t *testing.T) {
 		},
 	}
 
-	err = tn.Notify(feature)
+	err := tn.Notify(feature)
 	if err != nil {
 		t.Fatalf("Notify retornou erro inesperado: %v", err)
 	}
@@ -85,12 +120,7 @@ func TestTelegramNotifier_Notify_MultiUser(t *testing.T) {
 }
 
 func TestTelegramNotifier_PollingAndCommands(t *testing.T) {
-	dbPath := filepath.Join(t.TempDir(), "users_polling.db")
-	userDB, err := db.NewDatabase(dbPath)
-	if err != nil {
-		t.Fatalf("Falha ao inicializar o banco nos testes: %v", err)
-	}
-	defer userDB.Close() // Fecha o banco no final para liberar travas de arquivo no Windows
+	userDB := NewMockUserStore()
 
 	step := 0
 	var lastSentText string
@@ -132,7 +162,7 @@ func TestTelegramNotifier_PollingAndCommands(t *testing.T) {
 	tn.apiBaseURL = ts.URL
 
 	// Executa o primeiro ciclo de polling (/start)
-	err = tn.pollUpdates()
+	err := tn.pollUpdates()
 	if err != nil {
 		t.Fatalf("pollUpdates retornou erro no ciclo 1: %v", err)
 	}

@@ -20,6 +20,9 @@ type Config struct {
 	// Configurações do Telegram
 	TelegramToken  string
 	TelegramChatID string
+
+	// Banco de Dados PostgreSQL Connection String
+	DatabaseURL string
 }
 
 // Load carrega as configurações do ambiente ou define valores padrão (foco na Venezuela)
@@ -37,6 +40,9 @@ func Load() *Config {
 		// Configurações do bot do Telegram
 		TelegramToken:  getEnv("TELEGRAM_BOT_TOKEN", ""),
 		TelegramChatID: getEnv("TELEGRAM_CHAT_ID", ""),
+
+		// Conexão com o banco Postgres
+		DatabaseURL: getEnv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/sismo?sslmode=disable"),
 	}
 
 }

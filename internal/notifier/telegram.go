@@ -42,7 +42,7 @@ type alertJob struct {
 // TelegramNotifier gerencia o envio de mensagens com controle de vazão (rate limiting) e leitura de comandos
 type TelegramNotifier struct {
 	token        string
-	userDB       *db.Database
+	userDB       db.UserStore
 	client       *http.Client
 	apiBaseURL   string
 	lastUpdateID int64
@@ -50,7 +50,7 @@ type TelegramNotifier struct {
 }
 
 // NewTelegramNotifier cria uma nova instância do notificador do Telegram conectado ao banco
-func NewTelegramNotifier(token string, userDB *db.Database) *TelegramNotifier {
+func NewTelegramNotifier(token string, userDB db.UserStore) *TelegramNotifier {
 	return &TelegramNotifier{
 		token:      token,
 		userDB:     userDB,

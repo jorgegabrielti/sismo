@@ -2,11 +2,9 @@ package db
 
 import (
 	"database/sql"
-	"os"
-	"path/filepath"
 	"time"
 
-	_ "modernc.org/sqlite"
+	_ "github.com/lib/pq"
 )
 
 // UserPreference armazena as preferências e dados cadastrais de um usuário no Telegram
@@ -16,26 +14,31 @@ type UserPreference struct {
 	RegisteredAt time.Time `json:"registered_at"`
 }
 
-// Database gerencia a leitura e escrita no banco de dados SQLite local
+// UserStore define o contrato para persistência e busca de usuários e suas preferências
+type UserStore interface {
+	SaveUser(pref UserPreference) error
+	GetUser(chatID int64) (UserPreference, bool)
+	DeleteUser(chatID int64) error
+	GetAllUsers() []UserPreference
+	GetUsersForMagnitude(mag float64) []UserPreference
+}
+
+// Database gerencia a leitura e escrita no banco de dados PostgreSQL
 type Database struct {
 	db *sql.DB
 }
 
-// NewDatabase inicializa a conexão com o SQLite e executa as migrações de tabelas
-func NewDatabase(filePath string) (*Database, error) {
-	// Garante que o diretório pai existe
-	dir := filepath.Dir(filePath)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return nil, err
-	}
-
-	dbConn, err := sql.Open("sqlite", filePath)
+// NewDatabase inicializa a conexão com o PostgreSQL e executa as migrações de tabelas
+func NewDatabase(connStr string) (*Database, error) {
+	dbConn, err := sql.Open("postgres", connStr)
 	if err != nil {
 		return nil, err
 	}
 
-	// Limita o pool a 1 conexão aberta simultaneamente para evitar concorrência de travas (locking) no SQLite local
-	dbConn.SetMaxOpenConns(1)
+	// Configura limites de conexão adequados para alta concorrência
+	dbConn.SetMaxOpenConns(25)
+	dbConn.SetMaxIdleConns(25)
+	dbConn.SetConnMaxLifetime(5 * time.Minute)
 
 	db := &Database{db: dbConn}
 	if err := db.migrate(); err != nil {
@@ -46,13 +49,13 @@ func NewDatabase(filePath string) (*Database, error) {
 	return db, nil
 }
 
-// migrate executa a criação da tabela de usuários e do índice de magnitude se não existirem
+// migrate cria a tabela e os índices compatíveis com PostgreSQL
 func (db *Database) migrate() error {
 	query := `
 	CREATE TABLE IF NOT EXISTS users (
-		chat_id INTEGER PRIMARY KEY,
-		min_magnitude REAL NOT NULL,
-		registered_at TEXT NOT NULL
+		chat_id BIGINT PRIMARY KEY,
+		min_magnitude DOUBLE PRECISION NOT NULL,
+		registered_at TIMESTAMP WITH TIME ZONE NOT NULL
 	);
 	CREATE INDEX IF NOT EXISTS idx_users_magnitude ON users(min_magnitude);
 	`
@@ -65,35 +68,27 @@ func (db *Database) Close() error {
 	return db.db.Close()
 }
 
-// SaveUser adiciona ou atualiza um usuário no banco (Upsert)
+// SaveUser adiciona ou atualiza um usuário no banco (Upsert) usando sintaxe PostgreSQL
 func (db *Database) SaveUser(pref UserPreference) error {
 	query := `
 	INSERT INTO users (chat_id, min_magnitude, registered_at)
-	VALUES (?, ?, ?)
-	ON CONFLICT(chat_id) DO UPDATE SET
-		min_magnitude = excluded.min_magnitude;
+	VALUES ($1, $2, $3)
+	ON CONFLICT (chat_id) DO UPDATE SET
+		min_magnitude = EXCLUDED.min_magnitude;
 	`
-	_, err := db.db.Exec(query, pref.ChatID, pref.MinMagnitude, pref.RegisteredAt.Format(time.RFC3339))
+	_, err := db.db.Exec(query, pref.ChatID, pref.MinMagnitude, pref.RegisteredAt)
 	return err
 }
 
 // GetUser busca as preferências de um usuário pelo Chat ID
 func (db *Database) GetUser(chatID int64) (UserPreference, bool) {
-	query := `SELECT chat_id, min_magnitude, registered_at FROM users WHERE chat_id = ?`
+	query := `SELECT chat_id, min_magnitude, registered_at FROM users WHERE chat_id = $1`
 	row := db.db.QueryRow(query, chatID)
 
 	var pref UserPreference
-	var regAtStr string
-	err := row.Scan(&pref.ChatID, &pref.MinMagnitude, &regAtStr)
+	err := row.Scan(&pref.ChatID, &pref.MinMagnitude, &pref.RegisteredAt)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return UserPreference{}, false
-		}
 		return UserPreference{}, false
-	}
-
-	if t, err := time.Parse(time.RFC3339, regAtStr); err == nil {
-		pref.RegisteredAt = t
 	}
 
 	return pref, true
@@ -101,7 +96,7 @@ func (db *Database) GetUser(chatID int64) (UserPreference, bool) {
 
 // DeleteUser remove o cadastro do usuário
 func (db *Database) DeleteUser(chatID int64) error {
-	query := `DELETE FROM users WHERE chat_id = ?`
+	query := `DELETE FROM users WHERE chat_id = $1`
 	_, err := db.db.Exec(query, chatID)
 	return err
 }
@@ -118,11 +113,7 @@ func (db *Database) GetAllUsers() []UserPreference {
 	var list []UserPreference
 	for rows.Next() {
 		var pref UserPreference
-		var regAtStr string
-		if err := rows.Scan(&pref.ChatID, &pref.MinMagnitude, &regAtStr); err == nil {
-			if t, err := time.Parse(time.RFC3339, regAtStr); err == nil {
-				pref.RegisteredAt = t
-			}
+		if err := rows.Scan(&pref.ChatID, &pref.MinMagnitude, &pref.RegisteredAt); err == nil {
 			list = append(list, pref)
 		}
 	}
@@ -131,7 +122,7 @@ func (db *Database) GetAllUsers() []UserPreference {
 
 // GetUsersForMagnitude retorna apenas os usuários com magnitude limite compatível com o tremor
 func (db *Database) GetUsersForMagnitude(mag float64) []UserPreference {
-	query := `SELECT chat_id, min_magnitude, registered_at FROM users WHERE min_magnitude <= ?`
+	query := `SELECT chat_id, min_magnitude, registered_at FROM users WHERE min_magnitude <= $1`
 	rows, err := db.db.Query(query, mag)
 	if err != nil {
 		return nil
@@ -141,11 +132,7 @@ func (db *Database) GetUsersForMagnitude(mag float64) []UserPreference {
 	var list []UserPreference
 	for rows.Next() {
 		var pref UserPreference
-		var regAtStr string
-		if err := rows.Scan(&pref.ChatID, &pref.MinMagnitude, &regAtStr); err == nil {
-			if t, err := time.Parse(time.RFC3339, regAtStr); err == nil {
-				pref.RegisteredAt = t
-			}
+		if err := rows.Scan(&pref.ChatID, &pref.MinMagnitude, &pref.RegisteredAt); err == nil {
 			list = append(list, pref)
 		}
 	}

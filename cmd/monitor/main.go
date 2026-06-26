@@ -29,7 +29,7 @@ func main() {
 
 	// 1. Inicializar Banco de Dados de Usuários
 	log.Println("Carregando banco de dados de usuários...")
-	userDB, err := db.NewDatabase("data/sismo.db")
+	userDB, err := db.NewDatabase(cfg.DatabaseURL)
 	if err != nil {
 		log.Fatalf("Erro ao inicializar banco de dados: %v", err)
 	}

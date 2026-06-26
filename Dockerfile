@@ -23,8 +23,6 @@ RUN apk --no-cache add ca-certificates tzdata
 
 WORKDIR /app
 
-# Cria o diretório para armazenamento persistente do SQLite
-RUN mkdir -p /app/data
 
 # Copia o binário compilado
 COPY --from=builder /app/monitor /app/monitor
