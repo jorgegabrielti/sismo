@@ -1,12 +1,12 @@
-# Sismo - Monitoramento e Alertas de Terremotos em Tempo Real
+# Sismo - Monitoramento Global e Alertas Rápidos de Terremotos
 
-O **Sismo** é uma plataforma robusta e de escala global desenvolvida para monitorar a atividade sísmica mundial e emitir alertas inteligentes e personalizados em tempo real diretamente para usuários através do Telegram.
+O **Sismo** é uma plataforma robusta e de escala global desenvolvida para monitorar a atividade sísmica mundial e emitir alertas inteligentes e personalizados com alta velocidade diretamente para usuários através do Telegram.
 
 ---
 
 ## 🎯 Objetivo do Projeto
 
-Oferecer informações ágeis, precisas e acessíveis sobre tremores de terra globais. Ao contrário de sistemas de alerta genéricos, o Sismo integra **Filtros de Proximidade Inteligente** (baseados na localização em tempo real do usuário) e **Relatos Comunitários**, permitindo que a população colabore ativamente e se prepare melhor para desastres sísmicos.
+Oferecer informações ágeis, precisas e acessíveis sobre tremores de terra globais. Ao contrário de sistemas de alerta genéricos, o Sismo integra **Filtros de Proximidade Inteligente** (baseados na localização do usuário) e **Relatos Comunitários**, permitindo que a população colabore ativamente e se prepare melhor para desastres sísmicos.
 
 ---
 
@@ -26,11 +26,11 @@ Oferecer informações ágeis, precisas e acessíveis sobre tremores de terra gl
 ### 3. Relatos de Tremores Comunitários ("Did You Feel It?")
 - Cada mensagem de alerta do Telegram contém botões interativos integrados (`Sim, senti! 🟢` | `Não senti ⚪`).
 - As respostas coletadas são salvas no banco de dados para evitar duplicidade de votos por usuário/sismo.
-- Visualização de contadores consolidados na Landing Page em tempo real: `📊 Relatos: X sentiram | Y não sentiram`.
+- Visualização de contadores consolidados na Landing Page com atualização dinâmica: `📊 Relatos: X sentiram | Y não sentiram`.
 
 ### 4. Visualizações Geográficas Dinâmicas (Mapas)
 - **Visualização Direta no Telegram**: Toda notificação enviada pelo Bot anexa automaticamente um mapa estático da área do epicentro com um marcador vermelho no centro, gerado via **Yandex Static Maps API**. Você visualiza o mapa diretamente no balão da mensagem do Telegram, junto com os detalhes técnicos do tremor.
-- **Visualização Interativa Avançada**: Cada alerta inclui o link `"Mais detalhes no site da USGS"`. Ao clicar, você é direcionado para a página do evento no portal oficial do USGS, que exibe um mapa interativo 3D em tempo real, permitindo zoom, visualização de placas tectônicas e estações sismográficas próximas.
+- **Visualização Interativa Avançada**: Cada alerta inclui o link `"Mais detalhes no site da USGS"`. Ao clicar, você é direcionado para a página do evento no portal oficial do USGS, que exibe um mapa interativo 3D, permitindo zoom, visualização de placas tectônicas e estações sismográficas próximas.
 - **Resiliência de Envio**: O dispatcher de alertas possui um pipeline de resiliência com fallback automático. Caso o servidor de mapas falhe ou esteja inacessível, o bot rebaixa a mensagem para formato de texto simples com teclado interativo para garantir que a notificação de emergência chegue sem atrasos.
 
 ### 5. Modo Não Perturbe (DND) e Guias de Emergência
