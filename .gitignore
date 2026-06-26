@@ -1,0 +1,15 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+/monitor
+
+# IDEs
+.idea/
+.vscode/
+
+# System files
+.DS_Store
+Thumbs.db
