@@ -547,16 +547,35 @@ h1, h2, h3, h4, h5, h6 {
         gap: 16px;
     }
     .nav-links {
-        gap: 16px;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 12px;
+    }
+    .hero-section {
+        padding: 60px 0 80px;
     }
     .hero-title {
         font-size: 32px;
+    }
+    .hero-subtitle {
+        font-size: 16px;
+        margin-bottom: 24px;
+    }
+    .section {
+        padding: 60px 0;
+    }
+    .section-title {
+        font-size: 28px;
     }
     .grid-3 { grid-template-columns: 1fr; }
     .footer-container {
         flex-direction: column;
         gap: 12px;
         text-align: center;
+    }
+    .telegram-mockup {
+        width: 100%;
+        max-width: 100%;
     }
 }
 
