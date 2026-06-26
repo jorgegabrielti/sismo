@@ -29,8 +29,9 @@ Oferecer informações ágeis, precisas e acessíveis sobre tremores de terra gl
 - Visualização de contadores consolidados na Landing Page em tempo real: `📊 Relatos: X sentiram | Y não sentiram`.
 
 ### 4. Visualizações Geográficas Dinâmicas (Mapas)
-- Alertas são entregues com um mapa estático renderizado da região do epicentro com pin vermelho através da **Yandex Static Maps API**.
-- Pipeline resiliente com fallback automático para formato de mensagem puramente em texto caso haja limitações de tráfego de imagem.
+- **Visualização Direta no Telegram**: Toda notificação enviada pelo Bot anexa automaticamente um mapa estático da área do epicentro com um marcador vermelho no centro, gerado via **Yandex Static Maps API**. Você visualiza o mapa diretamente no balão da mensagem do Telegram, junto com os detalhes técnicos do tremor.
+- **Visualização Interativa Avançada**: Cada alerta inclui o link `"Mais detalhes no site da USGS"`. Ao clicar, você é direcionado para a página do evento no portal oficial do USGS, que exibe um mapa interativo 3D em tempo real, permitindo zoom, visualização de placas tectônicas e estações sismográficas próximas.
+- **Resiliência de Envio**: O dispatcher de alertas possui um pipeline de resiliência com fallback automático. Caso o servidor de mapas falhe ou esteja inacessível, o bot rebaixa a mensagem para formato de texto simples com teclado interativo para garantir que a notificação de emergência chegue sem atrasos.
 
 ### 5. Modo Não Perturbe (DND) e Guias de Emergência
 - Ativação ou desativação de alertas silenciosos (sem som de notificação) via comando.
