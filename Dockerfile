@@ -3,9 +3,8 @@ FROM golang:1.26-alpine AS builder
 
 WORKDIR /src
 
-# Copia dependências primeiro para aproveitar o cache do Docker
-COPY go.mod go.sum ./
-RUN go mod download
+# Copia apenas go.mod (sem dependências externas, go.sum não é necessário)
+COPY go.mod ./
 
 # Copia o restante do código fonte
 COPY cmd/ ./cmd/
