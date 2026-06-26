@@ -6,399 +6,220 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
-	"sismo/internal/db"
 	"sismo/internal/usgs"
 )
 
-// MockUserStore implementa a interface db.UserStore em memória para os testes unitários
-type MockUserStore struct {
-	users   map[int64]db.UserPreference
-	reports map[string]map[int64]bool
-}
+// TestTelegramNotifier_Notify_SendsPhotoWithCaption verifica que um sismo válido é
+// enfileirado e publicado no canal como foto (mapa) com legenda contendo os dados do evento.
+func TestTelegramNotifier_Notify_SendsPhotoWithCaption(t *testing.T) {
+	var mu sync.Mutex
+	var receivedChat string
+	var receivedCaption string
+	var sendPhotoCalled bool
 
-func NewMockUserStore() *MockUserStore {
-	return &MockUserStore{
-		users:   make(map[int64]db.UserPreference),
-		reports: make(map[string]map[int64]bool),
-	}
-}
-
-func (m *MockUserStore) SaveUser(pref db.UserPreference) error {
-	m.users[pref.ChatID] = pref
-	return nil
-}
-
-func (m *MockUserStore) GetUser(chatID int64) (db.UserPreference, bool) {
-	pref, exists := m.users[chatID]
-	return pref, exists
-}
-
-func (m *MockUserStore) DeleteUser(chatID int64) error {
-	delete(m.users, chatID)
-	return nil
-}
-
-func (m *MockUserStore) GetAllUsers() []db.UserPreference {
-	var list []db.UserPreference
-	for _, u := range m.users {
-		list = append(list, u)
-	}
-	return list
-}
-
-func (m *MockUserStore) GetUsersForMagnitude(mag float64) []db.UserPreference {
-	var list []db.UserPreference
-	for _, u := range m.users {
-		if u.MinMagnitude <= mag {
-			list = append(list, u)
-		}
-	}
-	return list
-}
-
-func (m *MockUserStore) SaveReport(chatID int64, sismoID string, felt bool) error {
-	if m.reports[sismoID] == nil {
-		m.reports[sismoID] = make(map[int64]bool)
-	}
-	m.reports[sismoID][chatID] = felt
-	return nil
-}
-
-func (m *MockUserStore) GetReportStats(sismoID string) (feltCount int, didNotFeelCount int, err error) {
-	userMap, exists := m.reports[sismoID]
-	if !exists {
-		return 0, 0, nil
-	}
-	for _, felt := range userMap {
-		if felt {
-			feltCount++
-		} else {
-			didNotFeelCount++
-		}
-	}
-	return feltCount, didNotFeelCount, nil
-}
-
-func TestTelegramNotifier_Notify_MultiUser(t *testing.T) {
-	userDB := NewMockUserStore()
-
-	// Cadastra dois usuários com preferências de magnitudes diferentes
-	userDB.SaveUser(db.UserPreference{ChatID: 111, MinMagnitude: 4.0, RegisteredAt: time.Now()})
-	userDB.SaveUser(db.UserPreference{ChatID: 222, MinMagnitude: 5.0, RegisteredAt: time.Now()})
-
-	// Servidor mock para capturar os envios do Notify
-	receivedChats := make(map[int64]bool)
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !strings.HasSuffix(r.URL.Path, "/botfake_token/sendMessage") {
-			w.WriteHeader(http.StatusNotFound)
+		if strings.HasSuffix(r.URL.Path, "/botfake_token/sendPhoto") {
+			var payload map[string]interface{}
+			json.NewDecoder(r.Body).Decode(&payload)
+
+			mu.Lock()
+			sendPhotoCalled = true
+			receivedChat, _ = payload["chat_id"].(string)
+			receivedCaption, _ = payload["caption"].(string)
+			mu.Unlock()
+
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`{"ok":true,"result":{}}`))
 			return
 		}
-
-		var payload map[string]interface{}
-		json.NewDecoder(r.Body).Decode(&payload)
-
-		chatIDFloat, _ := payload["chat_id"].(float64)
-		receivedChats[int64(chatIDFloat)] = true
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"ok":true,"result":{}}`))
+		w.WriteHeader(http.StatusNotFound)
 	}))
 	defer ts.Close()
 
-	tn := NewTelegramNotifier("fake_token", userDB)
+	tn := NewTelegramNotifier("fake_token", "@canal_teste")
 	tn.apiBaseURL = ts.URL
 
-	// Inicia o despachador de testes assíncrono
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go tn.StartDispatcher(ctx)
 
-	// Evento de sismo com magnitude 4.5
 	feature := usgs.Feature{
-		ID: "eq_4_5",
+		ID: "eq_caracas",
 		Properties: usgs.Properties{
-			Mag:   4.5,
+			Mag:   5.4,
 			Place: "Caracas, Venezuela",
 			Time:  time.Now().UnixNano() / 1e6,
+			URL:   "https://earthquake.usgs.gov/earthquakes/eventpage/eq_caracas",
+		},
+		Geometry: usgs.Geometry{
+			Coordinates: []float64{-66.9036, 10.4806, 12.5},
 		},
 	}
 
-	err := tn.Notify(feature)
-	if err != nil {
+	if err := tn.Notify(feature); err != nil {
 		t.Fatalf("Notify retornou erro inesperado: %v", err)
 	}
 
-	// Aguarda um curto intervalo para que a goroutine do dispatcher processe a fila
-	time.Sleep(100 * time.Millisecond)
+	// Aguarda o despachador processar a fila (rate limiter de 1 msg/s)
+	time.Sleep(1200 * time.Millisecond)
 
-	// Usuário 111 deve receber (4.5 >= 4.0)
-	if !receivedChats[111] {
-		t.Error("Esperava-se que o usuário 111 recebesse o alerta, mas ele foi ignorado")
+	mu.Lock()
+	defer mu.Unlock()
+
+	if !sendPhotoCalled {
+		t.Fatal("Esperava-se que sendPhoto fosse chamado para publicar o alerta com mapa")
 	}
-
-	// Usuário 222 não deve receber (4.5 < 5.0)
-	if receivedChats[222] {
-		t.Error("Esperava-se que o usuário 222 fosse ignorado, mas ele recebeu o alerta")
+	if receivedChat != "@canal_teste" {
+		t.Errorf("chat_id esperado '@canal_teste', obtido '%s'", receivedChat)
+	}
+	if !strings.Contains(receivedCaption, "Caracas, Venezuela") {
+		t.Errorf("legenda não contém o local do sismo: %s", receivedCaption)
+	}
+	if !strings.Contains(receivedCaption, "5.40") {
+		t.Errorf("legenda não contém a magnitude esperada: %s", receivedCaption)
 	}
 }
 
-func TestTelegramNotifier_PollingAndCommands(t *testing.T) {
-	userDB := NewMockUserStore()
-
-	step := 0
-	var lastSentText string
-	var lastSentChat int64
+// TestTelegramNotifier_Notify_FallbackToTextOnPhotoFailure verifica que, quando o envio
+// da foto falha, o despachador rebaixa a mensagem para texto simples (resiliência).
+func TestTelegramNotifier_Notify_FallbackToTextOnPhotoFailure(t *testing.T) {
+	var mu sync.Mutex
+	var sendMessageCalled bool
+	var receivedText string
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-
-		if strings.HasSuffix(r.URL.Path, "getUpdates") {
-			if step == 0 {
-				// Simula o usuário enviando o comando /start
-				w.Write([]byte(`{"ok":true,"result":[{"update_id":1000,"message":{"chat":{"id":12345},"text":"/start"}}]}`))
-				step++
-			} else if step == 1 {
-				// Simula o usuário alterando a magnitude para 5.5
-				w.Write([]byte(`{"ok":true,"result":[{"update_id":1001,"message":{"chat":{"id":12345},"text":"/magnitude 5.5"}}]}`))
-				step++
-			} else {
-				// Retorna lista vazia
-				w.Write([]byte(`{"ok":true,"result":[]}`))
-			}
-			return
-		}
-
-		if strings.HasSuffix(r.URL.Path, "sendMessage") {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/botfake_token/sendPhoto"):
+			// Simula falha no servidor de mapas
+			w.WriteHeader(http.StatusInternalServerError)
+		case strings.HasSuffix(r.URL.Path, "/botfake_token/sendMessage"):
 			var payload map[string]interface{}
 			json.NewDecoder(r.Body).Decode(&payload)
-			lastSentText, _ = payload["text"].(string)
-			chatIDFloat, _ := payload["chat_id"].(float64)
-			lastSentChat = int64(chatIDFloat)
+
+			mu.Lock()
+			sendMessageCalled = true
+			receivedText, _ = payload["text"].(string)
+			mu.Unlock()
+
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
 			w.Write([]byte(`{"ok":true,"result":{}}`))
-			return
+		default:
+			w.WriteHeader(http.StatusNotFound)
 		}
 	}))
 	defer ts.Close()
 
-	tn := NewTelegramNotifier("fake_token", userDB)
+	tn := NewTelegramNotifier("fake_token", "@canal_teste")
 	tn.apiBaseURL = ts.URL
 
-	// Executa o primeiro ciclo de polling (/start)
-	err := tn.pollUpdates()
-	if err != nil {
-		t.Fatalf("pollUpdates retornou erro no ciclo 1: %v", err)
-	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go tn.StartDispatcher(ctx)
 
-	pref, exists := userDB.GetUser(12345)
-	if !exists {
-		t.Fatal("Esperava-se que o usuário estivesse cadastrado no banco")
-	}
-	if pref.MinMagnitude != 4.5 {
-		t.Errorf("Magnitude padrão esperada era 4.5, obtida %.2f", pref.MinMagnitude)
-	}
-	if lastSentChat != 12345 || !strings.Contains(lastSentText, "Bem-vindo ao Sismo Alertas") {
-		t.Errorf("Mensagem de boas-vindas não enviada ou incorreta: %s", lastSentText)
-	}
-
-	// Executa o segundo ciclo de polling (/magnitude 5.5)
-	err = tn.pollUpdates()
-	if err != nil {
-		t.Fatalf("pollUpdates retornou erro no ciclo 2: %v", err)
-	}
-
-	pref, exists = userDB.GetUser(12345)
-	if !exists {
-		t.Fatal("Usuário sumiu do banco de dados")
-	}
-	if pref.MinMagnitude != 5.5 {
-		t.Errorf("Magnitude esperada era 5.5, obtida %.2f", pref.MinMagnitude)
-	}
-	if !strings.Contains(lastSentText, "5.50") {
-		t.Errorf("Mensagem de sucesso de magnitude incorreta: %s", lastSentText)
-	}
-}
-
-func TestTelegramNotifier_ProximityAndSilentMode(t *testing.T) {
-	userDB := NewMockUserStore()
-
-	latCaracas := 10.4806
-	lonCaracas := -66.9036
-
-	// 1. Usuário sem localização cadastrada (deve receber sempre)
-	userDB.SaveUser(db.UserPreference{ChatID: 100, MinMagnitude: 4.0, RegisteredAt: time.Now()})
-
-	// 2. Usuário com localização próxima (epicentro a ~10km, raio 50km - deve receber)
-	userDB.SaveUser(db.UserPreference{
-		ChatID:       200,
-		MinMagnitude: 4.0,
-		RegisteredAt: time.Now(),
-		Latitude:     &latCaracas,
-		Longitude:    &lonCaracas,
-		MaxDistance:  50,
-	})
-
-	// 3. Usuário com localização distante (epicentro a ~10km, raio 5km - deve pular)
-	userDB.SaveUser(db.UserPreference{
-		ChatID:       300,
-		MinMagnitude: 4.0,
-		RegisteredAt: time.Now(),
-		Latitude:     &latCaracas,
-		Longitude:    &lonCaracas,
-		MaxDistance:  5,
-	})
-
-	// 4. Usuário com modo silencioso ativo (deve enviar com disableNotification = true)
-	userDB.SaveUser(db.UserPreference{
-		ChatID:       400,
-		MinMagnitude: 4.0,
-		RegisteredAt: time.Now(),
-		SilentMode:   true,
-	})
-
-	tn := NewTelegramNotifier("fake_token", userDB)
-
-	// Simula sismo a cerca de 10km de Caracas (ex: Lat: 10.50, Lon: -66.85)
 	feature := usgs.Feature{
-		ID: "eq_nearby",
+		ID: "eq_fallback",
 		Properties: usgs.Properties{
-			Mag:   5.0,
-			Place: "Próximo a Caracas",
+			Mag:   6.1,
+			Place: "Offshore Chile",
 			Time:  time.Now().UnixNano() / 1e6,
 		},
 		Geometry: usgs.Geometry{
-			Coordinates: []float64{-66.85, 10.50, 10.0},
+			Coordinates: []float64{-71.5, -33.0, 20.0},
 		},
 	}
 
-	err := tn.Notify(feature)
-	if err != nil {
-		t.Fatalf("Notify retornou erro: %v", err)
+	if err := tn.Notify(feature); err != nil {
+		t.Fatalf("Notify retornou erro inesperado: %v", err)
 	}
 
-	// Verifica o conteúdo da fila (tn.jobChan)
-	close(tn.jobChan) // Fecha o canal para podermos ler em loop
+	time.Sleep(1200 * time.Millisecond)
 
-	receivedJobs := make(map[int64]alertJob)
-	for job := range tn.jobChan {
-		receivedJobs[job.chatID] = job
+	mu.Lock()
+	defer mu.Unlock()
+
+	if !sendMessageCalled {
+		t.Fatal("Esperava-se fallback para sendMessage após falha do sendPhoto")
 	}
-
-	// 1. Chat 100 deve estar na fila
-	if _, exists := receivedJobs[100]; !exists {
-		t.Error("Esperava-se que o usuário 100 recebesse o alerta (sem filtro de raio)")
-	}
-
-	// 2. Chat 200 deve estar na fila
-	if _, exists := receivedJobs[200]; !exists {
-		t.Error("Esperava-se que o usuário 200 recebesse o alerta (dentro do raio de 50km)")
-	}
-
-	// 3. Chat 300 NÃO deve estar na fila
-	if _, exists := receivedJobs[300]; exists {
-		t.Error("Esperava-se que o usuário 300 não recebesse o alerta (fora do raio de 5km)")
-	}
-
-	// 4. Chat 400 deve estar na fila e ter disableNotification = true
-	job400, exists := receivedJobs[400]
-	if !exists {
-		t.Error("Esperava-se que o usuário 400 recebesse o alerta")
-	} else if !job400.disableNotification {
-		t.Error("Esperava-se que o alerta para o usuário 400 fosse silencioso")
+	if !strings.Contains(receivedText, "Offshore Chile") {
+		t.Errorf("texto de fallback não contém o local do sismo: %s", receivedText)
 	}
 }
 
-func TestParsePeriod(t *testing.T) {
+func TestFormatMercalli(t *testing.T) {
 	tests := []struct {
-		arg     string
-		want    time.Duration
-		wantErr bool
+		val  float64
+		want string
 	}{
-		{"", 24 * time.Hour, false},
-		{"12h", 12 * time.Hour, false},
-		{"2d", 48 * time.Hour, false},
-		{"30d", 30 * 24 * time.Hour, false},
-		{"0h", 0, true},
-		{"31d", 0, true},
-		{"invalid", 0, true},
+		{1, "I (Não sentido)"},
+		{5, "V (Forte)"},
+		{10, "X (Extremo)"},
+		{12, "X+ (Extremo)"},
+		{0, "I (Não sentido)"},
 	}
 
 	for _, tt := range tests {
-		got, err := parsePeriod(tt.arg)
-		if (err != nil) != tt.wantErr {
-			t.Errorf("parsePeriod(%q) err = %v, wantErr = %v", tt.arg, err, tt.wantErr)
-		}
-		if got != tt.want {
-			t.Errorf("parsePeriod(%q) = %v, want %v", tt.arg, got, tt.want)
+		if got := formatMercalli(tt.val); got != tt.want {
+			t.Errorf("formatMercalli(%v) = %q, want %q", tt.val, got, tt.want)
 		}
 	}
 }
 
-func TestParseListarArgs(t *testing.T) {
+func TestTranslateEventType(t *testing.T) {
 	tests := []struct {
-		args          []string
-		wantDur       time.Duration
-		wantContinent string
-		wantBBox      bool
-		wantCountry   string
-		wantErr       bool
+		in   string
+		want string
 	}{
-		{[]string{}, 24 * time.Hour, "", false, "", false},
-		{[]string{"12h"}, 12 * time.Hour, "", false, "", false},
-		{[]string{"europa"}, 24 * time.Hour, "Europa", true, "", false},
-		{[]string{"sul", "3d"}, 72 * time.Hour, "América do Sul", true, "", false},
-		{[]string{"12h", "asia"}, 12 * time.Hour, "Ásia", true, "", false},
-		{[]string{"japao"}, 24 * time.Hour, "", false, "japao", false},
-		{[]string{"venezuela", "12h"}, 12 * time.Hour, "", false, "venezuela", false},
-		{[]string{"europa", "italia"}, 24 * time.Hour, "Europa", true, "italia", false},
-		{[]string{"europa", "asia"}, 0, "", false, "", true},
-		{[]string{"japao", "chile"}, 0, "", false, "", true},
+		{"earthquake", "Terremoto"},
+		{"quarry blast", "Explosão em Pedreira"},
+		{"volcanic eruption", "Erupção Vulcânica"},
+		{"", "Terremoto"},
+		{"landslide", "Deslizamento de Terra"},
 	}
 
 	for _, tt := range tests {
-		gotDur, gotBbox, gotName, gotCountry, err := parseListarArgs(tt.args)
-		if (err != nil) != tt.wantErr {
-			t.Errorf("parseListarArgs(%v) err = %v, wantErr = %v", tt.args, err, tt.wantErr)
-		}
-		if gotDur != tt.wantDur {
-			t.Errorf("parseListarArgs(%v) gotDur = %v, want %v", tt.args, gotDur, tt.wantDur)
-		}
-		if gotName != tt.wantContinent {
-			t.Errorf("parseListarArgs(%v) gotName = %q, want %q", tt.args, gotName, tt.wantContinent)
-		}
-		if (gotBbox != nil) != tt.wantBBox {
-			t.Errorf("parseListarArgs(%v) gotBbox is nil = %v, want non-nil = %v", tt.args, gotBbox == nil, tt.wantBBox)
-		}
-		if gotCountry != tt.wantCountry {
-			t.Errorf("parseListarArgs(%v) gotCountry = %q, want %q", tt.args, gotCountry, tt.wantCountry)
+		if got := translateEventType(tt.in); got != tt.want {
+			t.Errorf("translateEventType(%q) = %q, want %q", tt.in, got, tt.want)
 		}
 	}
 }
 
-func TestMatchCountry(t *testing.T) {
+func TestFormatPager(t *testing.T) {
 	tests := []struct {
-		place     string
-		query     string
-		wantMatch bool
+		in   string
+		want string
 	}{
-		{"12km ESE of Yokoshiba, Japan", "japao", true},
-		{"12km ESE of Yokoshiba, Japan", "JAPÃO", true},
-		{"3km W of Caracas, Venezuela", "venezuela", true},
-		{"10km S of Cobb, California", "eua", true},
-		{"10km S of Cobb, California", "usa", true},
-		{"12km E of Anchorage, Alaska", "estados unidos", true},
-		{"12km E of Rome, Italy", "italia", true},
-		{"12km E of Rome, Italy", "chile", false},
+		{"green", "🟢 Verde (Baixo impacto / Sem vítimas)"},
+		{"red", "🔴 Vermelho (Impacto grave / Danos severos)"},
+		{"", ""},
+		{"unknown", ""},
 	}
 
 	for _, tt := range tests {
-		got := matchCountry(tt.place, tt.query)
-		if got != tt.wantMatch {
-			t.Errorf("matchCountry(%q, %q) = %v, want %v", tt.place, tt.query, got, tt.wantMatch)
+		if got := formatPager(tt.in); got != tt.want {
+			t.Errorf("formatPager(%q) = %q, want %q", tt.in, got, tt.want)
+		}
+	}
+}
+
+func TestFormatStatus(t *testing.T) {
+	tests := []struct {
+		in   string
+		want string
+	}{
+		{"reviewed", "Revisado por Sismólogos 🔍"},
+		{"automatic", "Automático (Não revisado) 🤖"},
+		{"outro", "outro"},
+	}
+
+	for _, tt := range tests {
+		if got := formatStatus(tt.in); got != tt.want {
+			t.Errorf("formatStatus(%q) = %q, want %q", tt.in, got, tt.want)
 		}
 	}
 }

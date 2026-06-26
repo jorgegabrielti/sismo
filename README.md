@@ -1,12 +1,12 @@
 # Sismo - Monitoramento Global e Alertas Rápidos de Terremotos
 
-O **Sismo** é uma plataforma robusta e de escala global desenvolvida para monitorar a atividade sísmica mundial e emitir alertas inteligentes e personalizados com alta velocidade diretamente para usuários através do Telegram.
+O **Sismo** é uma plataforma desenvolvida para monitorar a atividade sísmica mundial e publicar alertas automáticos e ricos em informação, com alta velocidade, em um canal público do Telegram.
 
 ---
 
 ## 🎯 Objetivo do Projeto
 
-Oferecer informações ágeis, precisas e acessíveis sobre tremores de terra globais. Ao contrário de sistemas de alerta genéricos, o Sismo integra **Filtros de Proximidade Inteligente** (baseados na localização do usuário) e **Relatos Comunitários**, permitindo que a população colabore ativamente e se prepare melhor para desastres sísmicos.
+Oferecer informações ágeis, precisas e acessíveis sobre tremores de terra globais, integrando continuamente os dados oficiais da USGS e republicando-os de forma clara e visual para qualquer pessoa inscrita no canal.
 
 ---
 
@@ -14,58 +14,33 @@ Oferecer informações ágeis, precisas e acessíveis sobre tremores de terra gl
 
 ### 1. Alertas Globais Filtrados
 - Integração contínua com a API do **USGS (United States Geological Survey)**.
-- Transição de escopo regional para monitoramento de escala global, cobrindo todo o planeta com taxas eficientes de tráfego de dados.
-- Mapeamento e alerta instantâneo para eventos acima de magnitudes mínimas configuráveis.
+- Monitoramento de escala global (bounding box configurável, padrão cobre todo o planeta).
+- Alerta automático para eventos acima de uma magnitude mínima configurável.
+- Deduplicação por cache em memória (24h) para evitar alertas repetidos do mesmo evento.
 
-### 2. Filtro de Proximidade Geolocalizada (Raio Personalizado)
-- Os usuários podem compartilhar sua localização geográfica com o Bot no Telegram.
-- Utilização da **Fórmula de Haversine** no backend para medir a distância exata em quilômetros até o epicentro.
-- Envio de notificações informando a proximidade relativa do tremor: `📍 Epicentro a 45.2 km de você!`.
-- Filtros de distância configuráveis via comando (ex: raio de 150 km) ou desligamento para recebimento global.
+### 2. Publicação Rica em Detalhes no Canal do Telegram
+- Cada alerta publicado inclui local, magnitude (com tipo), data/hora, coordenadas, profundidade, alerta PAGER, significância, relatos "Did You Feel It?" da USGS, intensidade estimada (MMI), métricas de qualidade da leitura (estações, lacuna, resíduo) e status de revisão.
+- Eventos com risco de tsunami recebem um destaque visual especial na mensagem.
 
-### 3. Relatos de Tremores Comunitários ("Did You Feel It?")
-- Cada mensagem de alerta do Telegram contém botões interativos integrados (`Sim, senti! 🟢` | `Não senti ⚪`).
-- As respostas coletadas são salvas no banco de dados para evitar duplicidade de votos por usuário/sismo.
-- Visualização de contadores consolidados na Landing Page com atualização dinâmica: `📊 Relatos: X sentiram | Y não sentiram`.
+### 3. Visualizações Geográficas Dinâmicas (Mapas)
+- **Visualização Direta no Telegram**: toda notificação anexa automaticamente um mapa estático da área do epicentro com um marcador vermelho no centro, gerado via **Yandex Static Maps API**.
+- **Visualização Interativa Avançada**: cada alerta inclui o link `"Mais detalhes no site da USGS"`, que leva à página oficial do evento com mapa interativo 3D, placas tectônicas e estações sismográficas próximas.
+- **Resiliência de Envio**: o despachador de alertas possui fallback automático — se o servidor de mapas falhar ou estiver inacessível, a publicação é rebaixada para texto simples, garantindo que o alerta chegue sem atrasos.
 
-### 4. Visualizações Geográficas Dinâmicas (Mapas)
-- **Visualização Direta no Telegram**: Toda notificação enviada pelo Bot anexa automaticamente um mapa estático da área do epicentro com um marcador vermelho no centro, gerado via **Yandex Static Maps API**. Você visualiza o mapa diretamente no balão da mensagem do Telegram, junto com os detalhes técnicos do tremor.
-- **Visualização Interativa Avançada**: Cada alerta inclui o link `"Mais detalhes no site da USGS"`. Ao clicar, você é direcionado para a página do evento no portal oficial do USGS, que exibe um mapa interativo 3D, permitindo zoom, visualização de placas tectônicas e estações sismográficas próximas.
-- **Resiliência de Envio**: O dispatcher de alertas possui um pipeline de resiliência com fallback automático. Caso o servidor de mapas falhe ou esteja inacessível, o bot rebaixa a mensagem para formato de texto simples com teclado interativo para garantir que a notificação de emergência chegue sem atrasos.
-
-### 5. Modo Não Perturbe (DND) e Guias de Emergência
-- Ativação ou desativação de alertas silenciosos (sem som de notificação) via comando.
-- Guia informativo de preparação civil para instruir a população sobre o que fazer antes, durante e após sismos de grande impacto.
-
----
-
-## 🛠️ Comandos do Bot no Telegram
-
-Envie estes comandos simples no chat com o bot para configurar suas preferências:
-
-- `/start` : Realiza a inscrição no sistema de alertas e define os limites padrão.
-- `/help` : Exibe o guia de uso e a lista de comandos disponíveis.
-- `/status` : Exibe seu perfil ativo, magnitude limite, raio de proximidade e modo silencioso.
-- `/magnitude <valor>` : Configura a magnitude mínima para alertas (ex: `/magnitude 5.0`).
-- `/localizacao` : Instruções sobre como compartilhar a localização.
-- `/raio <km>` : Define um raio máximo para alertas em km. Use `0` para desativar e receber alertas de qualquer lugar do mundo (ex: `/raio 200`).
-- `/removerlocal` : Desativa o filtro de proximidade e apaga as coordenadas salvas.
-- `/listar [periodo] [continente/pais]` : Consulta sismos históricos e recentes correspondentes aos seus critérios (ex: `/listar 12h europa`, `/listar japao 2d`, `/listar usa`).
-- `/silencioso` : Alterna o envio de alertas sem som de notificação.
-- `/prevencao` (ou `/dicas`) : Exibe diretrizes de proteção civil para terremotos.
-- `/stop` : Cancela a inscrição nos alertas do Sismo.
+### 4. Despacho com Controle de Vazão
+- Fila assíncrona de publicações com *rate limiting* (1 msg/s) para respeitar os limites da API do Telegram.
 
 ---
 
 ## 🏗️ Arquitetura do Sistema
 
 O projeto é escrito em **Go** e estruturado segundo boas práticas de modularização:
-- **`cmd/monitor`**: Ponto de entrada do executável principal do monitoramento.
-- **`internal/usgs`**: Cliente de consumo, parsing e query da API do USGS.
-- **`internal/notifier`**: Mecanismo de enfileiramento e dispatchers (Telegram, Console) com controle de vazão de mensagens (Rate Limiting de 25 msg/s).
-- **`internal/db`**: Repositório de persistência SQL do Postgres para armazenar preferências e relatos.
-- **`internal/server`**: Servidor Web REST que serve a API de estatísticas e os arquivos estáticos.
-- **`web`**: Interface da Landing Page (HTML, lógica JS e estilização em CSS puro).
+- **`cmd/monitor`**: ponto de entrada do executável principal do monitoramento.
+- **`internal/usgs`**: cliente de consumo e parsing da API do USGS.
+- **`internal/filter`**: lógica de filtragem por magnitude/bounding box e deduplicação de eventos já notificados.
+- **`internal/notifier`**: dispatchers de alerta (Telegram, Console) com fila assíncrona e controle de vazão (rate limiting).
+- **`internal/server`**: servidor HTTP que serve os arquivos estáticos da landing page.
+- **`web`**: interface da landing page (HTML e CSS puro).
 
 ---
 
@@ -79,10 +54,21 @@ O projeto é escrito em **Go** e estruturado segundo boas práticas de modulariz
 Crie um arquivo `.env` na raiz do diretório com as configurações necessárias:
 ```env
 TELEGRAM_BOT_TOKEN=seu_token_do_bot_telegram
+TELEGRAM_CHANNEL_ID=@seu_canal_publico
+```
+
+Outras variáveis opcionais (com seus valores padrão):
+```env
+MIN_MAGNITUDE=4.5
+MONITOR_INTERVAL=1m
+MIN_LATITUDE=-90.0
+MAX_LATITUDE=90.0
+MIN_LONGITUDE=-180.0
+MAX_LONGITUDE=180.0
 ```
 
 ### 2. Inicializar os Serviços via Docker Compose
-Suba o banco de dados Postgres e a aplicação Sismo com o comando:
+Suba a aplicação Sismo com o comando:
 ```bash
 docker compose up --build -d
 ```
