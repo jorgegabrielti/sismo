@@ -4,7 +4,7 @@ FROM golang:1.26-alpine AS builder
 WORKDIR /src
 
 # Copia dependências primeiro para aproveitar o cache do Docker
-COPY go.mod ./
+COPY go.mod go.sum ./
 RUN go mod download
 
 # Copia o restante do código fonte
