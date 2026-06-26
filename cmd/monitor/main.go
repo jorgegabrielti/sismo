@@ -39,7 +39,7 @@ func main() {
 	if webPort == "" {
 		webPort = "8080"
 	}
-	go server.StartServer(webPort, "web")
+	go server.StartServer(webPort, "web", userDB)
 
 	// 3. Inicializar Notificadores e Componentes
 	log.Println("Inicializando componentes do monitor...")

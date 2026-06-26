@@ -15,11 +15,15 @@ import (
 
 // MockUserStore implementa a interface db.UserStore em memória para os testes unitários
 type MockUserStore struct {
-	users map[int64]db.UserPreference
+	users   map[int64]db.UserPreference
+	reports map[string]map[int64]bool
 }
 
 func NewMockUserStore() *MockUserStore {
-	return &MockUserStore{users: make(map[int64]db.UserPreference)}
+	return &MockUserStore{
+		users:   make(map[int64]db.UserPreference),
+		reports: make(map[string]map[int64]bool),
+	}
 }
 
 func (m *MockUserStore) SaveUser(pref db.UserPreference) error {
@@ -53,6 +57,29 @@ func (m *MockUserStore) GetUsersForMagnitude(mag float64) []db.UserPreference {
 		}
 	}
 	return list
+}
+
+func (m *MockUserStore) SaveReport(chatID int64, sismoID string, felt bool) error {
+	if m.reports[sismoID] == nil {
+		m.reports[sismoID] = make(map[int64]bool)
+	}
+	m.reports[sismoID][chatID] = felt
+	return nil
+}
+
+func (m *MockUserStore) GetReportStats(sismoID string) (feltCount int, didNotFeelCount int, err error) {
+	userMap, exists := m.reports[sismoID]
+	if !exists {
+		return 0, 0, nil
+	}
+	for _, felt := range userMap {
+		if felt {
+			feltCount++
+		} else {
+			didNotFeelCount++
+		}
+	}
+	return feltCount, didNotFeelCount, nil
 }
 
 func TestTelegramNotifier_Notify_MultiUser(t *testing.T) {
@@ -193,5 +220,94 @@ func TestTelegramNotifier_PollingAndCommands(t *testing.T) {
 	}
 	if !strings.Contains(lastSentText, "5.50") {
 		t.Errorf("Mensagem de sucesso de magnitude incorreta: %s", lastSentText)
+	}
+}
+
+func TestTelegramNotifier_ProximityAndSilentMode(t *testing.T) {
+	userDB := NewMockUserStore()
+
+	latCaracas := 10.4806
+	lonCaracas := -66.9036
+
+	// 1. Usuário sem localização cadastrada (deve receber sempre)
+	userDB.SaveUser(db.UserPreference{ChatID: 100, MinMagnitude: 4.0, RegisteredAt: time.Now()})
+
+	// 2. Usuário com localização próxima (epicentro a ~10km, raio 50km - deve receber)
+	userDB.SaveUser(db.UserPreference{
+		ChatID:       200,
+		MinMagnitude: 4.0,
+		RegisteredAt: time.Now(),
+		Latitude:     &latCaracas,
+		Longitude:    &lonCaracas,
+		MaxDistance:  50,
+	})
+
+	// 3. Usuário com localização distante (epicentro a ~10km, raio 5km - deve pular)
+	userDB.SaveUser(db.UserPreference{
+		ChatID:       300,
+		MinMagnitude: 4.0,
+		RegisteredAt: time.Now(),
+		Latitude:     &latCaracas,
+		Longitude:    &lonCaracas,
+		MaxDistance:  5,
+	})
+
+	// 4. Usuário com modo silencioso ativo (deve enviar com disableNotification = true)
+	userDB.SaveUser(db.UserPreference{
+		ChatID:       400,
+		MinMagnitude: 4.0,
+		RegisteredAt: time.Now(),
+		SilentMode:   true,
+	})
+
+	tn := NewTelegramNotifier("fake_token", userDB)
+
+	// Simula sismo a cerca de 10km de Caracas (ex: Lat: 10.50, Lon: -66.85)
+	feature := usgs.Feature{
+		ID: "eq_nearby",
+		Properties: usgs.Properties{
+			Mag:   5.0,
+			Place: "Próximo a Caracas",
+			Time:  time.Now().UnixNano() / 1e6,
+		},
+		Geometry: usgs.Geometry{
+			Coordinates: []float64{-66.85, 10.50, 10.0},
+		},
+	}
+
+	err := tn.Notify(feature)
+	if err != nil {
+		t.Fatalf("Notify retornou erro: %v", err)
+	}
+
+	// Verifica o conteúdo da fila (tn.jobChan)
+	close(tn.jobChan) // Fecha o canal para podermos ler em loop
+
+	receivedJobs := make(map[int64]alertJob)
+	for job := range tn.jobChan {
+		receivedJobs[job.chatID] = job
+	}
+
+	// 1. Chat 100 deve estar na fila
+	if _, exists := receivedJobs[100]; !exists {
+		t.Error("Esperava-se que o usuário 100 recebesse o alerta (sem filtro de raio)")
+	}
+
+	// 2. Chat 200 deve estar na fila
+	if _, exists := receivedJobs[200]; !exists {
+		t.Error("Esperava-se que o usuário 200 recebesse o alerta (dentro do raio de 50km)")
+	}
+
+	// 3. Chat 300 NÃO deve estar na fila
+	if _, exists := receivedJobs[300]; exists {
+		t.Error("Esperava-se que o usuário 300 não recebesse o alerta (fora do raio de 5km)")
+	}
+
+	// 4. Chat 400 deve estar na fila e ter disableNotification = true
+	job400, exists := receivedJobs[400]
+	if !exists {
+		t.Error("Esperava-se que o usuário 400 recebesse o alerta")
+	} else if !job400.disableNotification {
+		t.Error("Esperava-se que o alerta para o usuário 400 fosse silencioso")
 	}
 }

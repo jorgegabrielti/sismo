@@ -559,3 +559,86 @@ h1, h2, h3, h4, h5, h6 {
         text-align: center;
     }
 }
+
+/* --- Novas Classes para Relatos e Mockup Interativo --- */
+.mockup-buttons {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    padding-top: 10px;
+}
+.mockup-btn {
+    flex: 1;
+    text-align: center;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    padding: 6px 0;
+    font-size: 11px;
+    font-weight: 600;
+    color: #93c5fd;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.mockup-btn:hover {
+    background: rgba(255, 255, 255, 0.12);
+}
+.mockup-map-placeholder {
+    width: 100%;
+    height: 110px;
+    background: linear-gradient(180deg, #2b3b5c, #1f2a45);
+    border-radius: 8px;
+    margin: 8px 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary);
+    font-size: 11px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    gap: 6px;
+}
+.mockup-map-icon {
+    font-size: 20px;
+}
+
+.card-reports {
+    margin-top: 12px;
+    margin-bottom: 12px;
+    border-top: 1px solid var(--card-border);
+    padding-top: 10px;
+}
+.reports-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    background: rgba(16, 185, 129, 0.08);
+    border: 1px solid rgba(16, 185, 129, 0.25);
+    color: #a7f3d0;
+    padding: 6px 10px;
+    border-radius: 6px;
+    width: 100%;
+}
+.reports-badge.empty {
+    background: rgba(255, 255, 255, 0.03);
+    border-color: rgba(255, 255, 255, 0.08);
+    color: var(--text-secondary);
+}
+.report-icon {
+    font-size: 14px;
+}
+.felt-count {
+    color: #34d399;
+    font-weight: 700;
+}
+.not-felt-count {
+    color: #94a3b8;
+    font-weight: 500;
+}
+.reports-loading {
+    font-size: 11px;
+    color: var(--text-secondary);
+    font-style: italic;
+}

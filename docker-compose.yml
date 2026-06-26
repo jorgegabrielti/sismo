@@ -8,19 +8,19 @@ services:
     container_name: sismo-monitor
     restart: unless-stopped
     ports:
-      - "8080:8080"
+      - "8085:8080"
     environment:
       # Repassa a variável de token do ambiente do host
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       # Conexão com o banco Postgres rodando no outro container
       - DATABASE_URL=postgres://postgres:postgres@sismo-db:5432/sismo?sslmode=disable
-      # Configurações padrão (foco na Venezuela)
+      # Configurações padrão (Global)
       - MIN_MAGNITUDE=4.5
       - MONITOR_INTERVAL=1m
-      - MIN_LATITUDE=0.5
-      - MAX_LATITUDE=12.5
-      - MIN_LONGITUDE=-73.5
-      - MAX_LONGITUDE=-59.5
+      - MIN_LATITUDE=-90.0
+      - MAX_LATITUDE=90.0
+      - MIN_LONGITUDE=-180.0
+      - MAX_LONGITUDE=180.0
     depends_on:
       - sismo-db
 

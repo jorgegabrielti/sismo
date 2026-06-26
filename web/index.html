@@ -65,18 +65,26 @@
                     <div class="mockup-chat">
                         <div class="chat-bubble received">
                             👋 <b>Bem-vindo ao Sismo Alertas!</b><br>
-                            Você foi cadastrado com sucesso. Use <code>/magnitude</code> para ajustar seus alertas.
+                            Você foi cadastrado. Use 📍 Compartilhar Localização ou comandos como <code>/raio</code> e <code>/silencioso</code> para personalizar.
                         </div>
                         <div class="chat-bubble sent">
-                            /magnitude 5.0
+                            /status
                         </div>
                         <div class="chat-bubble received highlight">
                             ⚠️ <b>ALERTA DE TERREMOTO DETECTADO</b><br><br>
                             <b>Local:</b> 42 km NNE de Guiria, Venezuela<br>
                             <b>Magnitude:</b> 5.20<br>
                             <b>Profundidade:</b> 84.30 km<br>
-                            <b>Data/Hora:</b> 2026-06-26 10:48:15 UTC<br><br>
+                            📍 <b>Epicentro a 45.2 km de você!</b>
+                            <div class="mockup-map-placeholder">
+                                <span class="mockup-map-icon">🗺️</span>
+                                <span>[Mapa do Epicentro]</span>
+                            </div>
                             <span class="mockup-link">Mais detalhes no site da USGS</span>
+                            <div class="mockup-buttons">
+                                <div class="mockup-btn">Sim, senti! 🟢</div>
+                                <div class="mockup-btn">Não senti ⚪</div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -98,17 +106,32 @@
                 <div class="feature-card">
                     <div class="card-icon">⚡</div>
                     <h4>Notificação Imediata</h4>
-                    <p>Alertas entregues segundos após a validação oficial do sismo pelas redes mundiais de geologia, diretamente na tela do seu celular.</p>
+                    <p>Alertas entregues segundos após o registro do sismo pelas redes oficiais, direto no seu celular.</p>
                 </div>
                 <div class="feature-card">
-                    <div class="card-icon">⚙️</div>
-                    <h4>Totalmente Customizável</h4>
-                    <p>Você decide a magnitude mínima que deseja monitorar. Evite alertas desnecessários configurando filtros através de comandos simples.</p>
+                    <div class="card-icon">📍</div>
+                    <h4>Filtro de Proximidade</h4>
+                    <p>Compartilhe sua localização para receber alertas apenas se o epicentro estiver dentro do raio em km configurado (/raio).</p>
+                </div>
+                <div class="feature-card">
+                    <div class="card-icon">📊</div>
+                    <h4>Relatos da Comunidade</h4>
+                    <p>Responda aos botões interativos no chat se você sentiu ou não o sismo, ajudando a mapear o impacto local em tempo real.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="card-icon">🔕</div>
+                    <h4>Modo Silencioso</h4>
+                    <p>Ative o modo silencioso (/silencioso) para receber alertas discretos sem som de notificação, ideal para evitar sustos à noite.</p>
                 </div>
                 <div class="feature-card">
                     <div class="card-icon">🧭</div>
-                    <h4>Informação Clara</h4>
-                    <p>Chega de boatos em redes sociais. Receba o local exato, profundidade, magnitude e links oficiais da USGS para tomadas de decisão seguras.</p>
+                    <h4>Guias de Segurança</h4>
+                    <p>Acesse dicas de preparação rápida (/prevencao) com diretrizes claras de proteção civil sobre o que fazer durante tremores.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="card-icon">🔍</div>
+                    <h4>Dados Oficiais USGS</h4>
+                    <p>Informações de fontes sísmicas oficiais do planeta com links detalhados para visualização técnica e profundidade.</p>
                 </div>
             </div>
         </div>
@@ -219,9 +242,15 @@
                             <h5>${f.properties.place}</h5>
                             <p class="card-time">📅 ${formattedDate}</p>
                             <p class="card-depth">📍 Profundidade: ${f.geometry.coordinates[2].toFixed(1)} km</p>
+                            <div class="card-reports" id="reports-${f.id}">
+                                <span class="reports-loading">Carregando relatos...</span>
+                            </div>
                             <a href="${f.properties.url}" target="_blank" class="card-link">Ver detalhes no site da USGS &rarr;</a>
                         `;
                         container.appendChild(card);
+
+                        // Busca relatos locais da comunidade assincronamente
+                        fetchReportsForSismo(f.id);
                     });
                 }
 
@@ -231,6 +260,33 @@
                 console.error("Falha ao carregar sismos:", err);
                 const loader = document.getElementById("feed-loader");
                 loader.innerHTML = "<p class='text-error'>❌ Erro ao conectar com os servidores da USGS. Tente recarregar a página.</p>";
+            }
+        }
+
+        async function fetchReportsForSismo(sismoID) {
+            const reportsDiv = document.getElementById(`reports-${sismoID}`);
+            try {
+                const response = await fetch(`/api/reports?sismo_id=${sismoID}`);
+                if (!response.ok) throw new Error();
+                const stats = await response.json();
+                
+                if (stats.felt > 0 || stats.not_felt > 0) {
+                    reportsDiv.innerHTML = `
+                        <div class="reports-badge">
+                            <span class="report-icon">📊</span> Relatos: 
+                            <span class="felt-count">${stats.felt} sentiram</span> | 
+                            <span class="not-felt-count">${stats.not_felt} não sentiram</span>
+                        </div>
+                    `;
+                } else {
+                    reportsDiv.innerHTML = `
+                        <div class="reports-badge empty">
+                            <span class="report-icon">💬</span> Nenhum relato comunitário ainda
+                        </div>
+                    `;
+                }
+            } catch (err) {
+                reportsDiv.innerHTML = "";
             }
         }
     </script>

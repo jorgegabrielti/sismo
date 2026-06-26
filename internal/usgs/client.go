@@ -9,10 +9,23 @@ import (
 
 // Properties representa os metadados de cada terremoto
 type Properties struct {
-	Mag float64 `json:"mag"`
-	Place string `json:"place"`
-	Time int64 `json:"time"` //Timestamp em milisegundos
-	URL string `json:"url"`
+	Mag     float64  `json:"mag"`
+	Place   string   `json:"place"`
+	Time    int64    `json:"time"` // Timestamp em milisegundos
+	URL     string   `json:"url"`
+	Felt    *int     `json:"felt"`
+	CDI     *float64 `json:"cdi"`
+	MMI     *float64 `json:"mmi"`
+	Alert   string   `json:"alert"`
+	Status  string   `json:"status"`
+	Tsunami int      `json:"tsunami"`
+	Sig     int      `json:"sig"`
+	MagType string   `json:"magType"`
+	NST     *int     `json:"nst"`
+	DMin    *float64 `json:"dmin"`
+	Gap     *float64 `json:"gap"`
+	RMS     *float64 `json:"rms"`
+	Type    string   `json:"type"`
 }
 
 //Geometry representa as coordenadas geográficas do sismo

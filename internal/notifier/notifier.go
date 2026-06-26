@@ -39,14 +39,33 @@ func (c *ConsoleNotifier) Notify(feature usgs.Feature) error {
 
 	fmt.Println()
 	fmt.Println("==================================================")
-	fmt.Println("⚠️  ALERTA DE TERREMOTO DETECTADO!")
+	if feature.Properties.Tsunami == 1 {
+		fmt.Println("🚨 ALERTA DE TSUNAMI ATIVO! 🌊")
+	}
+	fmt.Println("⚠️  ALERTA DE EVENTO SÍSMICO DETECTADO")
 	fmt.Println("==================================================")
-	fmt.Printf("ID:          %s\n", feature.ID)
-	fmt.Printf("Local:       %s\n", feature.Properties.Place)
-	fmt.Printf("Magnitude:   %.2f\n", feature.Properties.Mag)
-	fmt.Printf("Data/Hora:   %s\n", tm.Format("2006-01-02 15:04:05 MST"))
-	fmt.Printf("Coordenadas: Lat: %.4f, Lon: %.4f, Profundidade: %.2f km\n", lat, lon, depth)
-	fmt.Printf("Link USGS:   %s\n", feature.Properties.URL)
+	fmt.Printf("ID:            %s\n", feature.ID)
+	if feature.Properties.Type != "" {
+		fmt.Printf("Tipo:          %s\n", feature.Properties.Type)
+	}
+	fmt.Printf("Local:         %s\n", feature.Properties.Place)
+	magStr := fmt.Sprintf("%.2f", feature.Properties.Mag)
+	if feature.Properties.MagType != "" {
+		magStr += " (" + feature.Properties.MagType + ")"
+	}
+	fmt.Printf("Magnitude:     %s\n", magStr)
+	fmt.Printf("Data/Hora:     %s\n", tm.Format("2006-01-02 15:04:05 MST"))
+	fmt.Printf("Coordenadas:   Lat: %.4f, Lon: %.4f, Profundidade: %.2f km\n", lat, lon, depth)
+	if feature.Properties.Alert != "" {
+		fmt.Printf("Alerta PAGER:  %s\n", feature.Properties.Alert)
+	}
+	if feature.Properties.Sig > 0 {
+		fmt.Printf("Significância: %d/1000\n", feature.Properties.Sig)
+	}
+	if feature.Properties.Felt != nil && *feature.Properties.Felt > 0 {
+		fmt.Printf("Relatos USGS:  %d\n", *feature.Properties.Felt)
+	}
+	fmt.Printf("Link USGS:     %s\n", feature.Properties.URL)
 	fmt.Println("==================================================")
 	return nil
 }
