@@ -344,19 +344,23 @@ func TestParseListarArgs(t *testing.T) {
 		wantDur       time.Duration
 		wantContinent string
 		wantBBox      bool
+		wantCountry   string
 		wantErr       bool
 	}{
-		{[]string{}, 24 * time.Hour, "", false, false},
-		{[]string{"12h"}, 12 * time.Hour, "", false, false},
-		{[]string{"europa"}, 24 * time.Hour, "Europa", true, false},
-		{[]string{"sul", "3d"}, 72 * time.Hour, "América do Sul", true, false},
-		{[]string{"12h", "asia"}, 12 * time.Hour, "Ásia", true, false},
-		{[]string{"europa", "asia"}, 0, "", false, true},
-		{[]string{"invalid"}, 0, "", false, true},
+		{[]string{}, 24 * time.Hour, "", false, "", false},
+		{[]string{"12h"}, 12 * time.Hour, "", false, "", false},
+		{[]string{"europa"}, 24 * time.Hour, "Europa", true, "", false},
+		{[]string{"sul", "3d"}, 72 * time.Hour, "América do Sul", true, "", false},
+		{[]string{"12h", "asia"}, 12 * time.Hour, "Ásia", true, "", false},
+		{[]string{"japao"}, 24 * time.Hour, "", false, "japao", false},
+		{[]string{"venezuela", "12h"}, 12 * time.Hour, "", false, "venezuela", false},
+		{[]string{"europa", "italia"}, 24 * time.Hour, "Europa", true, "italia", false},
+		{[]string{"europa", "asia"}, 0, "", false, "", true},
+		{[]string{"japao", "chile"}, 0, "", false, "", true},
 	}
 
 	for _, tt := range tests {
-		gotDur, gotBbox, gotName, err := parseListarArgs(tt.args)
+		gotDur, gotBbox, gotName, gotCountry, err := parseListarArgs(tt.args)
 		if (err != nil) != tt.wantErr {
 			t.Errorf("parseListarArgs(%v) err = %v, wantErr = %v", tt.args, err, tt.wantErr)
 		}
@@ -368,6 +372,33 @@ func TestParseListarArgs(t *testing.T) {
 		}
 		if (gotBbox != nil) != tt.wantBBox {
 			t.Errorf("parseListarArgs(%v) gotBbox is nil = %v, want non-nil = %v", tt.args, gotBbox == nil, tt.wantBBox)
+		}
+		if gotCountry != tt.wantCountry {
+			t.Errorf("parseListarArgs(%v) gotCountry = %q, want %q", tt.args, gotCountry, tt.wantCountry)
+		}
+	}
+}
+
+func TestMatchCountry(t *testing.T) {
+	tests := []struct {
+		place     string
+		query     string
+		wantMatch bool
+	}{
+		{"12km ESE of Yokoshiba, Japan", "japao", true},
+		{"12km ESE of Yokoshiba, Japan", "JAPÃO", true},
+		{"3km W of Caracas, Venezuela", "venezuela", true},
+		{"10km S of Cobb, California", "eua", true},
+		{"10km S of Cobb, California", "usa", true},
+		{"12km E of Anchorage, Alaska", "estados unidos", true},
+		{"12km E of Rome, Italy", "italia", true},
+		{"12km E of Rome, Italy", "chile", false},
+	}
+
+	for _, tt := range tests {
+		got := matchCountry(tt.place, tt.query)
+		if got != tt.wantMatch {
+			t.Errorf("matchCountry(%q, %q) = %v, want %v", tt.place, tt.query, got, tt.wantMatch)
 		}
 	}
 }

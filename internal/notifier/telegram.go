@@ -300,7 +300,7 @@ func (t *TelegramNotifier) handleMessage(chatID int64, text string) {
 			"- /localizacao : Como compartilhar sua localização para filtros de raio\n" +
 			"- /raio &lt;km&gt; : Altera o raio máximo em km para alertas (ex: <code>/raio 200</code>)\n" +
 			"- /removerlocal : Remove sua localização e desativa filtros de raio\n" +
-			"- /listar [periodo] [continente] : Busca sismos por período e/ou continente (ex: <code>/listar 12h europa</code>, <code>/listar sul 3d</code>)\n" +
+			"- /listar [periodo] [continente/pais] : Busca sismos por período, continente ou país (ex: <code>/listar 12h japao</code>, <code>/listar sul 3d</code>, <code>/listar usa</code>)\n" +
 			"- /silencioso : Ativa/desativa alertas sem som (modo DND)\n" +
 			"- /prevencao : Guia de segurança e preparação sísmica\n" +
 			"- /status : Mostra suas configurações ativas\n" +
@@ -314,7 +314,7 @@ func (t *TelegramNotifier) handleMessage(chatID int64, text string) {
 			return
 		}
 
-		dur, bbox, continentName, err := parseListarArgs(parts[1:])
+		dur, bbox, continentName, country, err := parseListarArgs(parts[1:])
 		if err != nil {
 			t.sendRawMessage(chatID, fmt.Sprintf("❌ %v", err))
 			return
@@ -350,6 +350,23 @@ func (t *TelegramNotifier) handleMessage(chatID int64, text string) {
 			return
 		}
 
+		// Filtra por país/região em memória se especificado
+		var filteredFeatures []usgs.Feature
+		if country != "" {
+			for _, f := range feed.Features {
+				if matchCountry(f.Properties.Place, country) {
+					filteredFeatures = append(filteredFeatures, f)
+				}
+			}
+		} else {
+			filteredFeatures = feed.Features
+		}
+
+		if len(filteredFeatures) == 0 {
+			t.sendRawMessage(chatID, "📭 Nenhum sismo encontrado com os seus critérios neste período no país/região informado.")
+			return
+		}
+
 		// Formata a lista de resposta
 		var listParts []string
 		titlePeriod := "últimas 24 horas"
@@ -369,18 +386,24 @@ func (t *TelegramNotifier) handleMessage(chatID int64, text string) {
 		if continentName != "" {
 			regionStr = " na " + continentName
 		}
+		if country != "" {
+			// Capitaliza a primeira letra do país para exibição elegante no título
+			runes := []rune(country)
+			runes[0] = []rune(strings.ToUpper(string(runes[0])))[0]
+			regionStr += " no país/região " + string(runes)
+		}
 
 		listParts = append(listParts, fmt.Sprintf("📅 <b>Sismos correspondentes no %s%s:</b>", titlePeriod, regionStr))
 		listParts = append(listParts, "")
 
 		// Limita exibição aos 10 sismos mais significativos/recentes
 		limit := 10
-		if len(feed.Features) < limit {
-			limit = len(feed.Features)
+		if len(filteredFeatures) < limit {
+			limit = len(filteredFeatures)
 		}
 
 		for i := 0; i < limit; i++ {
-			f := feed.Features[i]
+			f := filteredFeatures[i]
 			tm := time.Unix(f.Properties.Time/1000, 0)
 			
 			alertEmoji := "🔸"
@@ -424,8 +447,8 @@ func (t *TelegramNotifier) handleMessage(chatID int64, text string) {
 			listParts = append(listParts, "")
 		}
 
-		if len(feed.Features) > limit {
-			listParts = append(listParts, fmt.Sprintf("<i>...e mais %d outros sismos encontrados.</i>\n\nConfigure filtros mais restritos para refinar os resultados.", len(feed.Features)-limit))
+		if len(filteredFeatures) > limit {
+			listParts = append(listParts, fmt.Sprintf("<i>...e mais %d outros sismos encontrados.</i>\n\nConfigure filtros mais restritos para refinar os resultados.", len(filteredFeatures)-limit))
 		}
 
 		msg := strings.Join(listParts, "\n")
@@ -438,7 +461,7 @@ func (t *TelegramNotifier) handleMessage(chatID int64, text string) {
 			"- /localizacao : Veja como compartilhar sua localização\n" +
 			"- /raio &lt;km&gt; : Altera o raio limite de alertas. Use <code>/raio 0</code> para receber todos.\n" +
 			"- /removerlocal : Remove as coordenadas de localização de seu perfil\n" +
-			"- /listar [periodo] [continente] : Busca sismos por período e/ou continente (ex: <code>/listar 12h europa</code>, <code>/listar sul 3d</code>)\n" +
+			"- /listar [periodo] [continente/pais] : Busca sismos por período, continente ou país (ex: <code>/listar 12h japao</code>, <code>/listar sul 3d</code>, <code>/listar usa</code>)\n" +
 			"- /silencioso : Alterna o envio com/sem som de notificação\n" +
 			"- /prevencao : Exibe dicas de segurança e preparação sísmica\n" +
 			"- /status : Mostra as configurações e dados de cadastro\n" +
@@ -1016,10 +1039,11 @@ func getContinentBox(input string) (usgs.BoundingBox, string, bool) {
 	}
 }
 
-func parseListarArgs(args []string) (time.Duration, *usgs.BoundingBox, string, error) {
+func parseListarArgs(args []string) (time.Duration, *usgs.BoundingBox, string, string, error) {
 	dur := 24 * time.Hour
 	var bbox *usgs.BoundingBox
 	var continentName string
+	var country string
 
 	for _, arg := range args {
 		argClean := strings.ToLower(strings.TrimSpace(arg))
@@ -1031,7 +1055,7 @@ func parseListarArgs(args []string) (time.Duration, *usgs.BoundingBox, string, e
 		cBox, name, exists := getContinentBox(argClean)
 		if exists {
 			if bbox != nil {
-				return 0, nil, "", fmt.Errorf("especificou mais de um continente")
+				return 0, nil, "", "", fmt.Errorf("especificou mais de um continente")
 			}
 			bbox = &cBox
 			continentName = name
@@ -1045,8 +1069,73 @@ func parseListarArgs(args []string) (time.Duration, *usgs.BoundingBox, string, e
 			continue
 		}
 
-		return 0, nil, "", fmt.Errorf("parâmetro inválido '%s'. Use um continente (ex: europa, sul) ou período (ex: 12h, 2d)", arg)
+		// Caso contrário, assume como filtro de país/região
+		if country != "" {
+			return 0, nil, "", "", fmt.Errorf("especificou mais de um país/região: '%s' e '%s'", country, arg)
+		}
+		country = argClean
 	}
 
-	return dur, bbox, continentName, nil
+	return dur, bbox, continentName, country, nil
+}
+
+func normalizeString(s string) string {
+	s = strings.ToLower(s)
+	replacer := strings.NewReplacer(
+		"á", "a", "à", "a", "â", "a", "ã", "a", "ä", "a",
+		"é", "e", "è", "e", "ê", "e", "ë", "e",
+		"í", "i", "ì", "i", "î", "i", "ï", "i",
+		"ó", "o", "ò", "o", "ô", "o", "õ", "o", "ö", "o",
+		"ú", "u", "ù", "u", "û", "u", "ü", "u",
+		"ç", "c", "ñ", "n",
+	)
+	return replacer.Replace(s)
+}
+
+func matchCountry(place string, countryQuery string) bool {
+	placeNorm := normalizeString(place)
+	queryNorm := normalizeString(countryQuery)
+
+	usStates := []string{
+		"alaska", "california", "hawaii", "nevada", "utah", "idaho", "washington",
+		"oregon", "oklahoma", "texas", "puerto rico", "virgin islands", "arizona",
+		"new mexico", "colorado", "wyoming", "montana", "alabama", "arkansas",
+		"delaware", "florida", "georgia", "illinois", "indiana", "iowa", "kansas",
+		"kentucky", "louisiana", "maine", "maryland", "massachusetts", "michigan",
+		"minnesota", "mississippi", "missouri", "nebraska", "new hampshire",
+		"new jersey", "new york", "north carolina", "north dakota", "ohio",
+		"pennsylvania", "rhode island", "south carolina", "south dakota",
+		"tennessee", "vermont", "virginia", "west virginia", "wisconsin",
+	}
+
+	translations := map[string][]string{
+		"usa":            append([]string{"usa", "united states"}, usStates...),
+		"eua":            append([]string{"usa", "united states"}, usStates...),
+		"estadosunidos":  append([]string{"usa", "united states"}, usStates...),
+		"estados unidos": append([]string{"usa", "united states"}, usStates...),
+		"japao":          {"japan", "japao"},
+		"italia":         {"italy", "italia"},
+		"grecia":         {"greece", "grecia"},
+		"turquia":        {"turkey", "turquia"},
+		"islandia":       {"iceland", "islandia"},
+		"colombia":       {"colombia"},
+		"panama":         {"panama"},
+		"filipinas":      {"philippines", "filipinas"},
+		"indonesia":      {"indonesia"},
+		"novazelandia":   {"new zealand", "zelandia"},
+		"newzealand":     {"new zealand", "zelandia"},
+		"inglaterra":     {"united kingdom", "uk", "england", "great britain"},
+		"reinounido":     {"united kingdom", "uk", "england", "great britain"},
+	}
+
+	if targets, ok := translations[queryNorm]; ok {
+		for _, target := range targets {
+			if strings.Contains(placeNorm, target) {
+				return true
+			}
+		}
+		return false
+	}
+
+	return strings.Contains(placeNorm, queryNorm)
 }
