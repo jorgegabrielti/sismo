@@ -1,6 +1,7 @@
 package notifier
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -15,11 +16,12 @@ import (
 
 func TestTelegramNotifier_Notify_MultiUser(t *testing.T) {
 	// Cria banco temporário
-	dbPath := filepath.Join(t.TempDir(), "users.json")
+	dbPath := filepath.Join(t.TempDir(), "users.db")
 	userDB, err := db.NewDatabase(dbPath)
 	if err != nil {
 		t.Fatalf("Falha ao inicializar o banco nos testes: %v", err)
 	}
+	defer userDB.Close() // Fecha o banco no final para liberar travas de arquivo no Windows
 
 	// Cadastra dois usuários com preferências de magnitudes diferentes
 	userDB.SaveUser(db.UserPreference{ChatID: 111, MinMagnitude: 4.0, RegisteredAt: time.Now()})
@@ -48,6 +50,11 @@ func TestTelegramNotifier_Notify_MultiUser(t *testing.T) {
 	tn := NewTelegramNotifier("fake_token", userDB)
 	tn.apiBaseURL = ts.URL
 
+	// Inicia o despachador de testes assíncrono
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go tn.StartDispatcher(ctx)
+
 	// Evento de sismo com magnitude 4.5
 	feature := usgs.Feature{
 		ID: "eq_4_5",
@@ -63,6 +70,9 @@ func TestTelegramNotifier_Notify_MultiUser(t *testing.T) {
 		t.Fatalf("Notify retornou erro inesperado: %v", err)
 	}
 
+	// Aguarda um curto intervalo para que a goroutine do dispatcher processe a fila
+	time.Sleep(100 * time.Millisecond)
+
 	// Usuário 111 deve receber (4.5 >= 4.0)
 	if !receivedChats[111] {
 		t.Error("Esperava-se que o usuário 111 recebesse o alerta, mas ele foi ignorado")
@@ -75,11 +85,12 @@ func TestTelegramNotifier_Notify_MultiUser(t *testing.T) {
 }
 
 func TestTelegramNotifier_PollingAndCommands(t *testing.T) {
-	dbPath := filepath.Join(t.TempDir(), "users_polling.json")
+	dbPath := filepath.Join(t.TempDir(), "users_polling.db")
 	userDB, err := db.NewDatabase(dbPath)
 	if err != nil {
 		t.Fatalf("Falha ao inicializar o banco nos testes: %v", err)
 	}
+	defer userDB.Close() // Fecha o banco no final para liberar travas de arquivo no Windows
 
 	step := 0
 	var lastSentText string

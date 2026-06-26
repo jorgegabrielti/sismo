@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  sismo-monitor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sismo-monitor
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      # Repassa a variável de token do ambiente do host
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      # Configurações padrão (foco na Venezuela)
+      - MIN_MAGNITUDE=4.5
+      - MONITOR_INTERVAL=1m
+      - MIN_LATITUDE=0.5
+      - MAX_LATITUDE=12.5
+      - MIN_LONGITUDE=-73.5
+      - MAX_LONGITUDE=-59.5
+    volumes:
+      # Monta o volume para salvar o banco SQLite (.db) de forma persistente no host
+      - sismo_data:/app/data
+
+volumes:
+  sismo_data:
+    name: sismo_data_volume

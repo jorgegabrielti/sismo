@@ -33,13 +33,20 @@ type TelegramUpdatesResponse struct {
 	Result []TelegramUpdate `json:"result"`
 }
 
-// TelegramNotifier gerencia o envio de mensagens e a leitura de comandos
+// alertJob armazena uma mensagem a ser entregue em lote a um usuário
+type alertJob struct {
+	chatID int64
+	text   string
+}
+
+// TelegramNotifier gerencia o envio de mensagens com controle de vazão (rate limiting) e leitura de comandos
 type TelegramNotifier struct {
 	token        string
 	userDB       *db.Database
 	client       *http.Client
 	apiBaseURL   string
 	lastUpdateID int64
+	jobChan      chan alertJob
 }
 
 // NewTelegramNotifier cria uma nova instância do notificador do Telegram conectado ao banco
@@ -51,6 +58,7 @@ func NewTelegramNotifier(token string, userDB *db.Database) *TelegramNotifier {
 			Timeout: 15 * time.Second, // Timeout ligeiramente maior que o long polling do Telegram (10s)
 		},
 		apiBaseURL: "https://api.telegram.org",
+		jobChan:    make(chan alertJob, 150000), // Buffer de até 150.000 alertas em fila
 	}
 }
 
@@ -67,6 +75,33 @@ func (t *TelegramNotifier) StartListener(ctx context.Context) {
 				log.Printf("Erro ao buscar atualizações do Telegram: %v", err)
 				// Delay de segurança em caso de erro para não sobrecarregar
 				time.Sleep(5 * time.Second)
+			}
+		}
+	}
+}
+
+// StartDispatcher processa a fila de disparos assíncronos aplicando o Rate Limiting
+func (t *TelegramNotifier) StartDispatcher(ctx context.Context) {
+	log.Println("Iniciando despachador de alertas (Rate Limiter - 25 msg/s)...")
+	ticker := time.NewTicker(40 * time.Millisecond) // Garante o limite seguro de no máximo 25 mensagens por segundo (limite do TG é 30/s)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			log.Println("Despachador de alertas do Telegram encerrado.")
+			return
+		case job := <-t.jobChan:
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				// Dispara o envio HTTP em goroutine separada para não travar o ticker de contagem
+				go func(j alertJob) {
+					if err := t.sendRawMessage(j.chatID, j.text); err != nil {
+						log.Printf("Falha ao entregar alerta do Telegram para o chat %d: %v", j.chatID, err)
+					}
+				}(job)
 			}
 		}
 	}
@@ -229,11 +264,12 @@ func (t *TelegramNotifier) sendRawMessage(chatID int64, text string) error {
 	return nil
 }
 
-// Notify envia o alerta de terremoto para todos os usuários cadastrados cujos filtros sejam compatíveis
+// Notify filtra e enfileira o alerta de terremoto para envio assíncrono aos usuários compatíveis
 func (t *TelegramNotifier) Notify(feature usgs.Feature) error {
-	users := t.userDB.GetAllUsers()
+	// Busca do banco apenas os usuários cujo limite seja inferior ou igual à magnitude registrada
+	users := t.userDB.GetUsersForMagnitude(feature.Properties.Mag)
 	if len(users) == 0 {
-		return nil // Nenhum usuário cadastrado para receber alertas
+		return nil // Nenhum usuário afetado por este terremoto
 	}
 
 	tm := time.Unix(feature.Properties.Time/1000, 0)
@@ -265,12 +301,11 @@ func (t *TelegramNotifier) Notify(feature usgs.Feature) error {
 		feature.Properties.URL,
 	)
 
-	// Dispara o alerta para cada usuário inscrito
+	// Enfileira os alertas na fila em memória para processamento controlado do Rate Limiter
 	for _, user := range users {
-		if feature.Properties.Mag >= user.MinMagnitude {
-			if err := t.sendRawMessage(user.ChatID, msg); err != nil {
-				log.Printf("Falha ao enviar notificação de sismo para usuário %d: %v", user.ChatID, err)
-			}
+		t.jobChan <- alertJob{
+			chatID: user.ChatID,
+			text:   msg,
 		}
 	}
 

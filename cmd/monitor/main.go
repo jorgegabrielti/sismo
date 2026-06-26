@@ -29,7 +29,7 @@ func main() {
 
 	// 1. Inicializar Banco de Dados de Usuários
 	log.Println("Carregando banco de dados de usuários...")
-	userDB, err := db.NewDatabase("data/users.json")
+	userDB, err := db.NewDatabase("data/sismo.db")
 	if err != nil {
 		log.Fatalf("Erro ao inicializar banco de dados: %v", err)
 	}
@@ -60,6 +60,9 @@ func main() {
 
 		// Inicia escuta assíncrona de comandos recebidos no Telegram (Long Polling)
 		go tgNotifier.StartListener(ctx)
+
+		// Inicia o despachador assíncrono de alertas com controle de vazão
+		go tgNotifier.StartDispatcher(ctx)
 	} else {
 		log.Println("- Notificador do Telegram desativado (TELEGRAM_BOT_TOKEN não definido).")
 	}
