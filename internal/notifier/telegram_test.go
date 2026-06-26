@@ -337,3 +337,37 @@ func TestParsePeriod(t *testing.T) {
 		}
 	}
 }
+
+func TestParseListarArgs(t *testing.T) {
+	tests := []struct {
+		args          []string
+		wantDur       time.Duration
+		wantContinent string
+		wantBBox      bool
+		wantErr       bool
+	}{
+		{[]string{}, 24 * time.Hour, "", false, false},
+		{[]string{"12h"}, 12 * time.Hour, "", false, false},
+		{[]string{"europa"}, 24 * time.Hour, "Europa", true, false},
+		{[]string{"sul", "3d"}, 72 * time.Hour, "América do Sul", true, false},
+		{[]string{"12h", "asia"}, 12 * time.Hour, "Ásia", true, false},
+		{[]string{"europa", "asia"}, 0, "", false, true},
+		{[]string{"invalid"}, 0, "", false, true},
+	}
+
+	for _, tt := range tests {
+		gotDur, gotBbox, gotName, err := parseListarArgs(tt.args)
+		if (err != nil) != tt.wantErr {
+			t.Errorf("parseListarArgs(%v) err = %v, wantErr = %v", tt.args, err, tt.wantErr)
+		}
+		if gotDur != tt.wantDur {
+			t.Errorf("parseListarArgs(%v) gotDur = %v, want %v", tt.args, gotDur, tt.wantDur)
+		}
+		if gotName != tt.wantContinent {
+			t.Errorf("parseListarArgs(%v) gotName = %q, want %q", tt.args, gotName, tt.wantContinent)
+		}
+		if (gotBbox != nil) != tt.wantBBox {
+			t.Errorf("parseListarArgs(%v) gotBbox is nil = %v, want non-nil = %v", tt.args, gotBbox == nil, tt.wantBBox)
+		}
+	}
+}

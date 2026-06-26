@@ -300,7 +300,7 @@ func (t *TelegramNotifier) handleMessage(chatID int64, text string) {
 			"- /localizacao : Como compartilhar sua localização para filtros de raio\n" +
 			"- /raio &lt;km&gt; : Altera o raio máximo em km para alertas (ex: <code>/raio 200</code>)\n" +
 			"- /removerlocal : Remove sua localização e desativa filtros de raio\n" +
-			"- /listar &lt;periodo&gt; : Busca sismos ocorridos por período (ex: <code>/listar 12h</code>, <code>/listar 3d</code>)\n" +
+			"- /listar [periodo] [continente] : Busca sismos por período e/ou continente (ex: <code>/listar 12h europa</code>, <code>/listar sul 3d</code>)\n" +
 			"- /silencioso : Ativa/desativa alertas sem som (modo DND)\n" +
 			"- /prevencao : Guia de segurança e preparação sísmica\n" +
 			"- /status : Mostra suas configurações ativas\n" +
@@ -314,12 +314,7 @@ func (t *TelegramNotifier) handleMessage(chatID int64, text string) {
 			return
 		}
 
-		arg := ""
-		if len(parts) >= 2 {
-			arg = parts[1]
-		}
-
-		dur, err := parsePeriod(arg)
+		dur, bbox, continentName, err := parseListarArgs(parts[1:])
 		if err != nil {
 			t.sendRawMessage(chatID, fmt.Sprintf("❌ %v", err))
 			return
@@ -342,8 +337,8 @@ func (t *TelegramNotifier) handleMessage(chatID int64, text string) {
 		t.sendRawMessage(chatID, "🔍 <i>Buscando sismos correspondentes no USGS...</i>")
 
 		startTime := time.Now().Add(-dur)
-		// Faz busca filtrada diretamente na API do USGS
-		feed, err := t.usgsClient.Query(context.Background(), startTime, minMag, lat, lon, maxDist)
+		// Faz busca filtrada diretamente na API do USGS (incluindo BoundingBox se houver continente)
+		feed, err := t.usgsClient.Query(context.Background(), startTime, minMag, lat, lon, maxDist, bbox)
 		if err != nil {
 			log.Printf("Erro ao consultar USGS query API: %v", err)
 			t.sendRawMessage(chatID, "❌ Falha ao se conectar com a API da USGS para realizar a busca.")
@@ -358,10 +353,24 @@ func (t *TelegramNotifier) handleMessage(chatID int64, text string) {
 		// Formata a lista de resposta
 		var listParts []string
 		titlePeriod := "últimas 24 horas"
-		if arg != "" {
-			titlePeriod = "período de " + arg
+		if dur%(24*time.Hour) == 0 {
+			days := int(dur / (24 * time.Hour))
+			if days == 1 {
+				titlePeriod = "últimas 24 horas"
+			} else {
+				titlePeriod = fmt.Sprintf("últimos %d dias", days)
+			}
+		} else {
+			hours := int(dur / time.Hour)
+			titlePeriod = fmt.Sprintf("últimas %d horas", hours)
 		}
-		listParts = append(listParts, fmt.Sprintf("📅 <b>Sismos correspondentes no %s:</b>", titlePeriod))
+
+		regionStr := ""
+		if continentName != "" {
+			regionStr = " na " + continentName
+		}
+
+		listParts = append(listParts, fmt.Sprintf("📅 <b>Sismos correspondentes no %s%s:</b>", titlePeriod, regionStr))
 		listParts = append(listParts, "")
 
 		// Limita exibição aos 10 sismos mais significativos/recentes
@@ -429,7 +438,7 @@ func (t *TelegramNotifier) handleMessage(chatID int64, text string) {
 			"- /localizacao : Veja como compartilhar sua localização\n" +
 			"- /raio &lt;km&gt; : Altera o raio limite de alertas. Use <code>/raio 0</code> para receber todos.\n" +
 			"- /removerlocal : Remove as coordenadas de localização de seu perfil\n" +
-			"- /listar &lt;periodo&gt; : Busca sismos ocorridos por período (ex: <code>/listar 12h</code>, <code>/listar 3d</code>)\n" +
+			"- /listar [periodo] [continente] : Busca sismos por período e/ou continente (ex: <code>/listar 12h europa</code>, <code>/listar sul 3d</code>)\n" +
 			"- /silencioso : Alterna o envio com/sem som de notificação\n" +
 			"- /prevencao : Exibe dicas de segurança e preparação sísmica\n" +
 			"- /status : Mostra as configurações e dados de cadastro\n" +
@@ -984,4 +993,60 @@ func parsePeriod(arg string) (time.Duration, error) {
 	}
 
 	return d, nil
+}
+
+func getContinentBox(input string) (usgs.BoundingBox, string, bool) {
+	switch input {
+	case "america-do-sul", "americadosul", "sul", "sa", "sudamerica":
+		return usgs.BoundingBox{MinLat: -56.0, MaxLat: 13.0, MinLon: -92.0, MaxLon: -32.0}, "América do Sul", true
+	case "america-do-norte", "americadonorte", "norte", "na", "northamerica":
+		return usgs.BoundingBox{MinLat: 7.0, MaxLat: 85.0, MinLon: -170.0, MaxLon: -50.0}, "América do Norte", true
+	case "europa", "eu", "europe":
+		return usgs.BoundingBox{MinLat: 35.0, MaxLat: 72.0, MinLon: -25.0, MaxLon: 45.0}, "Europa", true
+	case "asia", "ásia", "as", "asia-continent":
+		return usgs.BoundingBox{MinLat: 1.0, MaxLat: 77.0, MinLon: 26.0, MaxLon: 180.0}, "Ásia", true
+	case "africa", "áfrica", "af", "africa-continent":
+		return usgs.BoundingBox{MinLat: -35.0, MaxLat: 38.0, MinLon: -20.0, MaxLon: 52.0}, "África", true
+	case "oceania", "oc", "australia":
+		return usgs.BoundingBox{MinLat: -50.0, MaxLat: 0.0, MinLon: 110.0, MaxLon: 180.0}, "Oceania", true
+	case "antartida", "antártida", "an", "antarctica":
+		return usgs.BoundingBox{MinLat: -90.0, MaxLat: -60.0, MinLon: -180.0, MaxLon: 180.0}, "Antártida", true
+	default:
+		return usgs.BoundingBox{}, "", false
+	}
+}
+
+func parseListarArgs(args []string) (time.Duration, *usgs.BoundingBox, string, error) {
+	dur := 24 * time.Hour
+	var bbox *usgs.BoundingBox
+	var continentName string
+
+	for _, arg := range args {
+		argClean := strings.ToLower(strings.TrimSpace(arg))
+		if argClean == "" {
+			continue
+		}
+
+		// Tenta casar como continente
+		cBox, name, exists := getContinentBox(argClean)
+		if exists {
+			if bbox != nil {
+				return 0, nil, "", fmt.Errorf("especificou mais de um continente")
+			}
+			bbox = &cBox
+			continentName = name
+			continue
+		}
+
+		// Se não, tenta como duração
+		d, err := parsePeriod(argClean)
+		if err == nil {
+			dur = d
+			continue
+		}
+
+		return 0, nil, "", fmt.Errorf("parâmetro inválido '%s'. Use um continente (ex: europa, sul) ou período (ex: 12h, 2d)", arg)
+	}
+
+	return dur, bbox, continentName, nil
 }

@@ -81,8 +81,16 @@ func (c *Client) Fetch() (*EarthquakeFeed, error) {
 	return &feed, nil
 }
 
+// BoundingBox representa limites geográficos retangulares
+type BoundingBox struct {
+	MinLat float64
+	MaxLat float64
+	MinLon float64
+	MaxLon float64
+}
+
 // Query realiza uma busca customizada de terremotos históricos/recentes no USGS
-func (c *Client) Query(ctx context.Context, start time.Time, minMag float64, lat, lon *float64, maxDistKm float64) (*EarthquakeFeed, error) {
+func (c *Client) Query(ctx context.Context, start time.Time, minMag float64, lat, lon *float64, maxDistKm float64, bbox *BoundingBox) (*EarthquakeFeed, error) {
 	baseURL := "https://earthquake.usgs.gov/fdsnws/event/1/query"
 
 	req, err := http.NewRequestWithContext(ctx, "GET", baseURL, nil)
@@ -96,7 +104,12 @@ func (c *Client) Query(ctx context.Context, start time.Time, minMag float64, lat
 	q.Add("minmagnitude", fmt.Sprintf("%.2f", minMag))
 	q.Add("orderby", "time")
 
-	if lat != nil && lon != nil && maxDistKm > 0 {
+	if bbox != nil {
+		q.Add("minlatitude", fmt.Sprintf("%.4f", bbox.MinLat))
+		q.Add("maxlatitude", fmt.Sprintf("%.4f", bbox.MaxLat))
+		q.Add("minlongitude", fmt.Sprintf("%.4f", bbox.MinLon))
+		q.Add("maxlongitude", fmt.Sprintf("%.4f", bbox.MaxLon))
+	} else if lat != nil && lon != nil && maxDistKm > 0 {
 		q.Add("latitude", fmt.Sprintf("%.4f", *lat))
 		q.Add("longitude", fmt.Sprintf("%.4f", *lon))
 		q.Add("maxradiuskm", fmt.Sprintf("%.2f", maxDistKm))
