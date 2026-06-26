@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sismo - Monitoramento e Alertas de Terremotos em Tempo Real</title>
+    <meta name="description" content="Proteja quem você ama. O Sismo monitora atividades sísmicas em tempo real e envia alertas personalizados diretamente no seu Telegram. Gratuito e instantâneo.">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="index.css">
+</head>
+<body>
+
+    <!-- Header / Navbar -->
+    <header class="navbar">
+        <div class="container navbar-container">
+            <div class="logo" id="logo-brand">
+                <span class="pulse-icon"></span>
+                <h1>SISMO</h1>
+            </div>
+            <nav class="nav-links">
+                <a href="#proposito" class="nav-item">Propósito</a>
+                <a href="#como-funciona" class="nav-item">Como Funciona</a>
+                <a href="#live-feed" class="nav-item">Sismos Recentes</a>
+            </nav>
+            <div class="nav-cta">
+                <a href="https://t.me/sismo_alerta_bot" target="_blank" class="btn btn-secondary btn-sm" id="nav-telegram-btn">Acessar Bot</a>
+            </div>
+        </div>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="hero-section">
+        <div class="hero-glow-1"></div>
+        <div class="hero-glow-2"></div>
+        <div class="container hero-container">
+            <div class="hero-content">
+                <span class="badge">Monitoramento Sísmico Cidadão</span>
+                <h2 class="hero-title">Informação que Salva Vidas, Direto no seu Celular.</h2>
+                <p class="hero-subtitle">
+                    O <strong>Sismo</strong> conecta redes globais de sensores e envia alertas de terremotos com filtros personalizados de magnitude diretamente para o seu Telegram. Simples, rápido e 100% gratuito.
+                </p>
+                <div class="hero-actions">
+                    <a href="https://t.me/sismo_alerta_bot" target="_blank" class="btn btn-primary btn-lg" id="hero-telegram-btn">
+                        Conectar ao Telegram Bot
+                        <svg class="icon-telegram" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2ZM16.64 8.8C16.49 9.53 13.56 22.09 13.56 22.09C13.56 22.09 13.39 22.29 13.13 22.28C12.87 22.27 12.61 22.07 12.61 22.07L8.74 19.06L6.5 21.25C6.5 21.25 6.36 21.39 6.2 21.39C6.04 21.39 5.92 21.25 5.92 21.25L6.68 16.92L14.77 9.42C14.89 9.3 14.74 9.23 14.59 9.33L4.69 15.65L1.87 14.77C1.87 14.77 1.63 14.69 1.62 14.47C1.61 14.25 1.87 14.14 1.87 14.14L20.89 6.81C20.89 6.81 21.12 6.7 21.26 6.82C21.4 6.94 21.32 7.23 21.32 7.23L16.64 8.8Z" fill="currentColor"/>
+                        </svg>
+                    </a>
+                </div>
+            </div>
+            <div class="hero-visual">
+                <!-- Mockup do Telegram -->
+                <div class="telegram-mockup">
+                    <div class="mockup-header">
+                        <div class="mockup-avatar">S</div>
+                        <div class="mockup-title-container">
+                            <span class="mockup-name">Sismo Alertas Bot</span>
+                            <span class="mockup-status">bot</span>
+                        </div>
+                    </div>
+                    <div class="mockup-chat">
+                        <div class="chat-bubble received">
+                            👋 <b>Bem-vindo ao Sismo Alertas!</b><br>
+                            Você foi cadastrado com sucesso. Use <code>/magnitude</code> para ajustar seus alertas.
+                        </div>
+                        <div class="chat-bubble sent">
+                            /magnitude 5.0
+                        </div>
+                        <div class="chat-bubble received highlight">
+                            ⚠️ <b>ALERTA DE TERREMOTO DETECTADO</b><br><br>
+                            <b>Local:</b> 42 km NNE de Guiria, Venezuela<br>
+                            <b>Magnitude:</b> 5.20<br>
+                            <b>Profundidade:</b> 84.30 km<br>
+                            <b>Data/Hora:</b> 2026-06-26 10:48:15 UTC<br><br>
+                            <span class="mockup-link">Mais detalhes no site da USGS</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Propósito / Benefícios -->
+    <section id="proposito" class="section bg-dark-secondary">
+        <div class="container">
+            <div class="section-header text-center">
+                <span class="section-subtitle">Nosso Propósito</span>
+                <h3 class="section-title">Por que criamos o Sismo?</h3>
+                <p class="section-desc">
+                    Terremotos não podem ser prevenidos, mas a informação instantânea e a preparação são ferramentas cruciais para mitigar riscos e salvar vidas em momentos críticos.
+                </p>
+            </div>
+            <div class="grid grid-3">
+                <div class="feature-card">
+                    <div class="card-icon">⚡</div>
+                    <h4>Notificação Imediata</h4>
+                    <p>Alertas entregues segundos após a validação oficial do sismo pelas redes mundiais de geologia, diretamente na tela do seu celular.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="card-icon">⚙️</div>
+                    <h4>Totalmente Customizável</h4>
+                    <p>Você decide a magnitude mínima que deseja monitorar. Evite alertas desnecessários configurando filtros através de comandos simples.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="card-icon">🧭</div>
+                    <h4>Informação Clara</h4>
+                    <p>Chega de boatos em redes sociais. Receba o local exato, profundidade, magnitude e links oficiais da USGS para tomadas de decisão seguras.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Como Funciona / Ciência -->
+    <section id="como-funciona" class="section">
+        <div class="container">
+            <div class="grid grid-2 align-center">
+                <div class="science-visual">
+                    <div class="seismic-wave-diagram">
+                        <div class="epicenter-marker">💥 Epicentro</div>
+                        <div class="wave wave-p">Ondas P (Primárias - Rápidas e não destrutivas)</div>
+                        <div class="wave wave-s">Ondas S (Secundárias - Lentas e destrutivas)</div>
+                    </div>
+                </div>
+                <div class="science-content">
+                    <span class="section-subtitle">Ciência por trás dos Alertas</span>
+                    <h3 class="section-title">Como funciona um Alerta Precoce?</h3>
+                    <p>
+                        Quando um terremoto acontece, ele libera ondas P (mais velozes, causam poucos tremores) e ondas S (mais lentas e destrutivas).
+                    </p>
+                    <p>
+                        Como a informação digital viaja na velocidade da luz (quase 300.000 km/s) e as ondas sísmicas viajam na velocidade do som, os sensores detectam as ondas P instantaneamente e o sinal de alerta viaja até você muito antes do tremor destrutivo chegar.
+                    </p>
+                    <div class="science-note">
+                        <strong>Nota de Preparação:</strong> Segundos de aviso permitem que você se proteja embaixo de uma mesa, afaste-se de vidraças e desligue registros de gás e energia.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Live USGS Feed -->
+    <section id="live-feed" class="section bg-dark-secondary">
+        <div class="container">
+            <div class="section-header text-center">
+                <span class="section-subtitle">Tempo Real</span>
+                <h3 class="section-title">Últimos Terremotos Globais</h3>
+                <p class="section-desc">
+                    Estes são os sismos mais recentes registrados no mundo nas últimas horas pela USGS.
+                </p>
+            </div>
+
+            <!-- Loader -->
+            <div id="feed-loader" class="loader-container">
+                <div class="spinner"></div>
+                <p>Carregando atividade sísmica recente...</p>
+            </div>
+
+            <!-- Live cards container -->
+            <div id="feed-container" class="grid grid-3 hide">
+                <!-- Preenchido via Javascript -->
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container footer-container">
+            <p>&copy; 2026 Projeto Sismo. Todos os direitos reservados.</p>
+            <p>Dados sísmicos obtidos em tempo real da <a href="https://earthquake.usgs.gov" target="_blank">USGS (U.S. Geological Survey)</a>.</p>
+        </div>
+    </footer>
+
+    <!-- Script de Integração USGS Live Feed -->
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            fetchRecentEarthquakes();
+        });
+
+        async function fetchRecentEarthquakes() {
+            try {
+                // Busca terremotos significativos (mag >= 2.5) nas últimas horas
+                const response = await fetch("https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_day.geojson");
+                if (!response.ok) throw new Error("Erro ao consultar a API da USGS");
+                const data = await response.json();
+                
+                // Pega no máximo os 6 últimos
+                const features = data.features.slice(0, 6);
+                const container = document.getElementById("feed-container");
+                const loader = document.getElementById("feed-loader");
+                
+                container.innerHTML = "";
+
+                if (features.length === 0) {
+                    container.innerHTML = "<p class='col-span-3 text-center'>Nenhum terremoto significativo registrado nas últimas horas.</p>";
+                } else {
+                    features.forEach(f => {
+                        const date = new Date(f.properties.time);
+                        const formattedDate = date.toLocaleString("pt-BR", {
+                            day: "2-digit",
+                            month: "2-digit",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit"
+                        });
+                        
+                        const mag = f.properties.mag.toFixed(1);
+                        let magClass = "mag-low";
+                        if (f.properties.mag >= 6.0) magClass = "mag-high";
+                        else if (f.properties.mag >= 4.5) magClass = "mag-med";
+
+                        const card = document.createElement("div");
+                        card.className = "live-card";
+                        card.innerHTML = `
+                            <div class="card-badge ${magClass}">Mag ${mag}</div>
+                            <h5>${f.properties.place}</h5>
+                            <p class="card-time">📅 ${formattedDate}</p>
+                            <p class="card-depth">📍 Profundidade: ${f.geometry.coordinates[2].toFixed(1)} km</p>
+                            <a href="${f.properties.url}" target="_blank" class="card-link">Ver detalhes no site da USGS &rarr;</a>
+                        `;
+                        container.appendChild(card);
+                    });
+                }
+
+                loader.classList.add("hide");
+                container.classList.remove("hide");
+            } catch (err) {
+                console.error("Falha ao carregar sismos:", err);
+                const loader = document.getElementById("feed-loader");
+                loader.innerHTML = "<p class='text-error'>❌ Erro ao conectar com os servidores da USGS. Tente recarregar a página.</p>";
+            }
+        }
+    </script>
+</body>
+</html>

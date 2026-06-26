@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 	"os/signal"
@@ -8,8 +9,10 @@ import (
 	"time"
 
 	"sismo/internal/config"
+	"sismo/internal/db"
 	"sismo/internal/filter"
 	"sismo/internal/notifier"
+	"sismo/internal/server"
 	"sismo/internal/usgs"
 )
 
@@ -21,21 +24,44 @@ func main() {
 	log.Printf("- USGS URL: %s", cfg.USGSURL)
 	log.Printf("- Intervalo: %v", cfg.Interval)
 	log.Printf("- Magnitude Mínima: %.2f", cfg.MinMagnitude)
-	log.Printf("- Bounding Box: Lat [%.4f, %.4f], Lon [%.4f, %.4f]", 
+	log.Printf("- Bounding Box: Lat [%.4f, %.4f], Lon [%.4f, %.4f]",
 		cfg.MinLatitude, cfg.MaxLatitude, cfg.MinLongitude, cfg.MaxLongitude)
 
-	log.Println("Inicializando componentes do sistema...")
+	// 1. Inicializar Banco de Dados de Usuários
+	log.Println("Carregando banco de dados de usuários...")
+	userDB, err := db.NewDatabase("data/users.json")
+	if err != nil {
+		log.Fatalf("Erro ao inicializar banco de dados: %v", err)
+	}
+
+	// 2. Inicializar Servidor Web da Landing Page em Background
+	webPort := os.Getenv("PORT")
+	if webPort == "" {
+		webPort = "8080"
+	}
+	go server.StartServer(webPort, "web")
+
+	// 3. Inicializar Notificadores e Componentes
+	log.Println("Inicializando componentes do monitor...")
 	client := usgs.NewClient(cfg.USGSURL)
 	flt := filter.NewFilter(cfg)
 
 	var notifiers []notifier.Notifier
 	notifiers = append(notifiers, notifier.NewConsoleNotifier())
 
-	if cfg.TelegramToken != "" && cfg.TelegramChatID != "" {
-		log.Println("- Notificador do Telegram ativado e configurado.")
-		notifiers = append(notifiers, notifier.NewTelegramNotifier(cfg.TelegramToken, cfg.TelegramChatID))
+	// Contexto para encerramento gracioso das goroutines em segundo plano
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	if cfg.TelegramToken != "" {
+		log.Println("- Notificador do Telegram ativado e conectado ao banco.")
+		tgNotifier := notifier.NewTelegramNotifier(cfg.TelegramToken, userDB)
+		notifiers = append(notifiers, tgNotifier)
+
+		// Inicia escuta assíncrona de comandos recebidos no Telegram (Long Polling)
+		go tgNotifier.StartListener(ctx)
 	} else {
-		log.Println("- Notificador do Telegram desativado (TELEGRAM_BOT_TOKEN e TELEGRAM_CHAT_ID não definidos).")
+		log.Println("- Notificador do Telegram desativado (TELEGRAM_BOT_TOKEN não definido).")
 	}
 
 	sigChan := make(chan os.Signal, 1)
@@ -66,7 +92,7 @@ func main() {
 		}
 
 		if notifiedCount > 0 {
-			log.Printf("Ciclo concluído. %d novos alertas emitidos.", notifiedCount)
+			log.Printf("Ciclo concluído. %d novos alertas emitidos para usuários correspondentes.", notifiedCount)
 		} else {
 			log.Println("Ciclo concluído. Nenhum novo terremoto detectado dentro dos filtros.")
 		}
@@ -76,7 +102,7 @@ func main() {
 	}
 
 	log.Println("Iniciando monitoramento de terremotos...")
-	// Executa uma busca inicial imediatamente ao iniciar o monitor
+	// Executa busca inicial imediata
 	runCycle()
 
 	for {
@@ -85,6 +111,7 @@ func main() {
 			runCycle()
 		case sig := <-sigChan:
 			log.Printf("Sinal de terminação recebido (%v). Encerrando monitor de forma limpa...", sig)
+			cancel() // Cancela a goroutine de escuta do Telegram
 			return
 		}
 	}
