@@ -1,6 +1,7 @@
 package usgs
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -76,6 +77,46 @@ func (c *Client) Fetch() (*EarthquakeFeed, error) {
 	var feed EarthquakeFeed
 	if err := json.NewDecoder(resp.Body).Decode(&feed); err != nil {
 		return nil, fmt.Errorf("falha no parse do JSON: %w", err)
+	}
+	return &feed, nil
+}
+
+// Query realiza uma busca customizada de terremotos históricos/recentes no USGS
+func (c *Client) Query(ctx context.Context, start time.Time, minMag float64, lat, lon *float64, maxDistKm float64) (*EarthquakeFeed, error) {
+	baseURL := "https://earthquake.usgs.gov/fdsnws/event/1/query"
+
+	req, err := http.NewRequestWithContext(ctx, "GET", baseURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("falha ao criar requisição de busca: %w", err)
+	}
+
+	q := req.URL.Query()
+	q.Add("format", "geojson")
+	q.Add("starttime", start.UTC().Format("2006-01-02T15:04:05"))
+	q.Add("minmagnitude", fmt.Sprintf("%.2f", minMag))
+	q.Add("orderby", "time")
+
+	if lat != nil && lon != nil && maxDistKm > 0 {
+		q.Add("latitude", fmt.Sprintf("%.4f", *lat))
+		q.Add("longitude", fmt.Sprintf("%.4f", *lon))
+		q.Add("maxradiuskm", fmt.Sprintf("%.2f", maxDistKm))
+	}
+
+	req.URL.RawQuery = q.Encode()
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("falha na requisição de busca USGS: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("status HTTP inesperado na busca da USGS: %d", resp.StatusCode)
+	}
+
+	var feed EarthquakeFeed
+	if err := json.NewDecoder(resp.Body).Decode(&feed); err != nil {
+		return nil, fmt.Errorf("falha no parse do JSON de busca: %w", err)
 	}
 	return &feed, nil
 }

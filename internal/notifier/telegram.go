@@ -72,6 +72,12 @@ type TelegramNotifier struct {
 	apiBaseURL   string
 	lastUpdateID int64
 	jobChan      chan alertJob
+	usgsClient   *usgs.Client
+}
+
+// SetUSGSClient define o cliente USGS para realizar buscas de sismos por período
+func (t *TelegramNotifier) SetUSGSClient(client *usgs.Client) {
+	t.usgsClient = client
 }
 
 // NewTelegramNotifier cria uma nova instância do notificador do Telegram conectado ao banco
@@ -294,12 +300,127 @@ func (t *TelegramNotifier) handleMessage(chatID int64, text string) {
 			"- /localizacao : Como compartilhar sua localização para filtros de raio\n" +
 			"- /raio &lt;km&gt; : Altera o raio máximo em km para alertas (ex: <code>/raio 200</code>)\n" +
 			"- /removerlocal : Remove sua localização e desativa filtros de raio\n" +
+			"- /listar &lt;periodo&gt; : Busca sismos ocorridos por período (ex: <code>/listar 12h</code>, <code>/listar 3d</code>)\n" +
 			"- /silencioso : Ativa/desativa alertas sem som (modo DND)\n" +
 			"- /prevencao : Guia de segurança e preparação sísmica\n" +
 			"- /status : Mostra suas configurações ativas\n" +
 			"- /stop : Cancela a inscrição\n" +
 			"- /help : Mostra este menu de ajuda"
 		t.sendRawMessage(chatID, welcome)
+
+	case "/listar":
+		if t.usgsClient == nil {
+			t.sendRawMessage(chatID, "❌ O serviço de busca não está ativo no momento.")
+			return
+		}
+
+		arg := ""
+		if len(parts) >= 2 {
+			arg = parts[1]
+		}
+
+		dur, err := parsePeriod(arg)
+		if err != nil {
+			t.sendRawMessage(chatID, fmt.Sprintf("❌ %v", err))
+			return
+		}
+
+		// Recupera preferências de filtragem do usuário
+		pref, exists := t.userDB.GetUser(chatID)
+		minMag := 4.5
+		var lat, lon *float64
+		var maxDist float64
+		if exists {
+			minMag = pref.MinMagnitude
+			if pref.Latitude != nil && pref.Longitude != nil {
+				lat = pref.Latitude
+				lon = pref.Longitude
+				maxDist = pref.MaxDistance
+			}
+		}
+
+		t.sendRawMessage(chatID, "🔍 <i>Buscando sismos correspondentes no USGS...</i>")
+
+		startTime := time.Now().Add(-dur)
+		// Faz busca filtrada diretamente na API do USGS
+		feed, err := t.usgsClient.Query(context.Background(), startTime, minMag, lat, lon, maxDist)
+		if err != nil {
+			log.Printf("Erro ao consultar USGS query API: %v", err)
+			t.sendRawMessage(chatID, "❌ Falha ao se conectar com a API da USGS para realizar a busca.")
+			return
+		}
+
+		if feed == nil || len(feed.Features) == 0 {
+			t.sendRawMessage(chatID, "📭 Nenhum sismo encontrado com os seus critérios neste período.")
+			return
+		}
+
+		// Formata a lista de resposta
+		var listParts []string
+		titlePeriod := "últimas 24 horas"
+		if arg != "" {
+			titlePeriod = "período de " + arg
+		}
+		listParts = append(listParts, fmt.Sprintf("📅 <b>Sismos correspondentes no %s:</b>", titlePeriod))
+		listParts = append(listParts, "")
+
+		// Limita exibição aos 10 sismos mais significativos/recentes
+		limit := 10
+		if len(feed.Features) < limit {
+			limit = len(feed.Features)
+		}
+
+		for i := 0; i < limit; i++ {
+			f := feed.Features[i]
+			tm := time.Unix(f.Properties.Time/1000, 0)
+			
+			alertEmoji := "🔸"
+			if f.Properties.Tsunami == 1 {
+				alertEmoji = "🌊"
+			} else if f.Properties.Mag >= 6.0 {
+				alertEmoji = "🔴"
+			} else if f.Properties.Mag >= 5.0 {
+				alertEmoji = "🟡"
+			}
+
+			magTypeStr := ""
+			if f.Properties.MagType != "" {
+				magTypeStr = " (" + strings.ToUpper(f.Properties.MagType) + ")"
+			}
+			
+			statusStr := "Auto"
+			if strings.ToLower(f.Properties.Status) == "reviewed" {
+				statusStr = "Revisado"
+			}
+
+			feltStr := ""
+			if f.Properties.Felt != nil && *f.Properties.Felt > 0 {
+				feltStr = fmt.Sprintf(" | 👥 %d relatos", *f.Properties.Felt)
+			}
+
+			itemStr := fmt.Sprintf(
+				"%s <b>M %.2f%s</b> - %s\n"+
+					"   <i>%s | Status: %s%s</i>\n"+
+					"   👉 <a href=\"%s\">Mais detalhes</a>",
+				alertEmoji,
+				f.Properties.Mag,
+				magTypeStr,
+				f.Properties.Place,
+				tm.Format("15:04 MST - 2006-01-02"),
+				statusStr,
+				feltStr,
+				f.Properties.URL,
+			)
+			listParts = append(listParts, itemStr)
+			listParts = append(listParts, "")
+		}
+
+		if len(feed.Features) > limit {
+			listParts = append(listParts, fmt.Sprintf("<i>...e mais %d outros sismos encontrados.</i>\n\nConfigure filtros mais restritos para refinar os resultados.", len(feed.Features)-limit))
+		}
+
+		msg := strings.Join(listParts, "\n")
+		t.sendRawMessage(chatID, msg)
 
 	case "/help":
 		help := "📚 <b>Instruções de Uso - Sismo Alertas</b>\n\n" +
@@ -308,6 +429,7 @@ func (t *TelegramNotifier) handleMessage(chatID int64, text string) {
 			"- /localizacao : Veja como compartilhar sua localização\n" +
 			"- /raio &lt;km&gt; : Altera o raio limite de alertas. Use <code>/raio 0</code> para receber todos.\n" +
 			"- /removerlocal : Remove as coordenadas de localização de seu perfil\n" +
+			"- /listar &lt;periodo&gt; : Busca sismos ocorridos por período (ex: <code>/listar 12h</code>, <code>/listar 3d</code>)\n" +
 			"- /silencioso : Alterna o envio com/sem som de notificação\n" +
 			"- /prevencao : Exibe dicas de segurança e preparação sísmica\n" +
 			"- /status : Mostra as configurações e dados de cadastro\n" +
@@ -833,4 +955,33 @@ func haversine(lat1, lon1, lat2, lon2 float64) float64 {
 		math.Sin(dLon/2)*math.Sin(dLon/2)*math.Cos(rLat1)*math.Cos(rLat2)
 	c := 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
 	return R * c
+}
+
+func parsePeriod(arg string) (time.Duration, error) {
+	arg = strings.ToLower(strings.TrimSpace(arg))
+	if arg == "" {
+		return 24 * time.Hour, nil // Padrão 24h
+	}
+
+	// Trata sufixo em dias
+	if strings.HasSuffix(arg, "d") {
+		daysStr := strings.TrimSuffix(arg, "d")
+		days, err := strconv.Atoi(daysStr)
+		if err != nil || days <= 0 || days > 30 {
+			return 0, fmt.Errorf("período inválido: use entre 1 e 30 dias (ex: 2d)")
+		}
+		return time.Duration(days) * 24 * time.Hour, nil
+	}
+
+	// Trata com ParseDuration
+	d, err := time.ParseDuration(arg)
+	if err != nil {
+		return 0, fmt.Errorf("período inválido: formato incorreto (ex: 12h, 2d)")
+	}
+
+	if d <= 0 || d > 30*24*time.Hour {
+		return 0, fmt.Errorf("período inválido: deve ser entre 1 hora e 30 dias (ex: 12h)")
+	}
+
+	return d, nil
 }

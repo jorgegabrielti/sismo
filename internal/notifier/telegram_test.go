@@ -311,3 +311,29 @@ func TestTelegramNotifier_ProximityAndSilentMode(t *testing.T) {
 		t.Error("Esperava-se que o alerta para o usuário 400 fosse silencioso")
 	}
 }
+
+func TestParsePeriod(t *testing.T) {
+	tests := []struct {
+		arg     string
+		want    time.Duration
+		wantErr bool
+	}{
+		{"", 24 * time.Hour, false},
+		{"12h", 12 * time.Hour, false},
+		{"2d", 48 * time.Hour, false},
+		{"30d", 30 * 24 * time.Hour, false},
+		{"0h", 0, true},
+		{"31d", 0, true},
+		{"invalid", 0, true},
+	}
+
+	for _, tt := range tests {
+		got, err := parsePeriod(tt.arg)
+		if (err != nil) != tt.wantErr {
+			t.Errorf("parsePeriod(%q) err = %v, wantErr = %v", tt.arg, err, tt.wantErr)
+		}
+		if got != tt.want {
+			t.Errorf("parsePeriod(%q) = %v, want %v", tt.arg, got, tt.want)
+		}
+	}
+}

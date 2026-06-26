@@ -56,6 +56,7 @@ func main() {
 	if cfg.TelegramToken != "" {
 		log.Println("- Notificador do Telegram ativado e conectado ao banco.")
 		tgNotifier := notifier.NewTelegramNotifier(cfg.TelegramToken, userDB)
+		tgNotifier.SetUSGSClient(client)
 		notifiers = append(notifiers, tgNotifier)
 
 		// Inicia escuta assíncrona de comandos recebidos no Telegram (Long Polling)
