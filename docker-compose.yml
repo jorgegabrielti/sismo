@@ -10,34 +10,11 @@ services:
     ports:
       - "8085:8080"
     environment:
-      # Repassa a variável de token do ambiente do host
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
-      # Conexão com o banco Postgres rodando no outro container
-      - DATABASE_URL=postgres://postgres:postgres@sismo-db:5432/sismo?sslmode=disable
-      # Configurações padrão (Global)
+      - TELEGRAM_CHANNEL_ID=${TELEGRAM_CHANNEL_ID}
       - MIN_MAGNITUDE=4.5
       - MONITOR_INTERVAL=1m
       - MIN_LATITUDE=-90.0
       - MAX_LATITUDE=90.0
       - MIN_LONGITUDE=-180.0
       - MAX_LONGITUDE=180.0
-    depends_on:
-      - sismo-db
-
-  sismo-db:
-    image: postgres:15-alpine
-    container_name: sismo-db
-    restart: unless-stopped
-    ports:
-      - "5432:5432" # Expõe a porta para o host para caso queira inspecionar externamente
-    environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=sismo
-    volumes:
-      # Mantém os dados do banco persistentes no disco do host
-      - sismo_db_data:/var/lib/postgresql/data
-
-volumes:
-  sismo_db_data:
-    name: sismo_db_data_volume

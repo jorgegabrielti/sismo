@@ -242,15 +242,10 @@
                             <h5>${f.properties.place}</h5>
                             <p class="card-time">📅 ${formattedDate}</p>
                             <p class="card-depth">📍 Profundidade: ${f.geometry.coordinates[2].toFixed(1)} km</p>
-                            <div class="card-reports" id="reports-${f.id}">
-                                <span class="reports-loading">Carregando relatos...</span>
-                            </div>
                             <a href="${f.properties.url}" target="_blank" class="card-link">Ver detalhes no site da USGS &rarr;</a>
                         `;
                         container.appendChild(card);
 
-                        // Busca relatos locais da comunidade assincronamente
-                        fetchReportsForSismo(f.id);
                     });
                 }
 
@@ -263,32 +258,6 @@
             }
         }
 
-        async function fetchReportsForSismo(sismoID) {
-            const reportsDiv = document.getElementById(`reports-${sismoID}`);
-            try {
-                const response = await fetch(`/api/reports?sismo_id=${sismoID}`);
-                if (!response.ok) throw new Error();
-                const stats = await response.json();
-                
-                if (stats.felt > 0 || stats.not_felt > 0) {
-                    reportsDiv.innerHTML = `
-                        <div class="reports-badge">
-                            <span class="report-icon">📊</span> Relatos: 
-                            <span class="felt-count">${stats.felt} sentiram</span> | 
-                            <span class="not-felt-count">${stats.not_felt} não sentiram</span>
-                        </div>
-                    `;
-                } else {
-                    reportsDiv.innerHTML = `
-                        <div class="reports-badge empty">
-                            <span class="report-icon">💬</span> Nenhum relato comunitário ainda
-                        </div>
-                    `;
-                }
-            } catch (err) {
-                reportsDiv.innerHTML = "";
-            }
-        }
     </script>
 </body>
 </html>
