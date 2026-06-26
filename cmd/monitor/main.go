@@ -27,7 +27,16 @@ func main() {
 	log.Println("Inicializando componentes do sistema...")
 	client := usgs.NewClient(cfg.USGSURL)
 	flt := filter.NewFilter(cfg)
-	ntf := notifier.NewConsoleNotifier()
+
+	var notifiers []notifier.Notifier
+	notifiers = append(notifiers, notifier.NewConsoleNotifier())
+
+	if cfg.TelegramToken != "" && cfg.TelegramChatID != "" {
+		log.Println("- Notificador do Telegram ativado e configurado.")
+		notifiers = append(notifiers, notifier.NewTelegramNotifier(cfg.TelegramToken, cfg.TelegramChatID))
+	} else {
+		log.Println("- Notificador do Telegram desativado (TELEGRAM_BOT_TOKEN e TELEGRAM_CHAT_ID não definidos).")
+	}
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
@@ -47,10 +56,11 @@ func main() {
 		notifiedCount := 0
 		for _, feature := range feed.Features {
 			if flt.Evaluate(feature) {
-				if err := ntf.Notify(feature); err != nil {
-					log.Printf("Erro ao notificar evento %s: %v", feature.ID, err)
-				} else {
-					notifiedCount++
+				notifiedCount++
+				for _, ntf := range notifiers {
+					if err := ntf.Notify(feature); err != nil {
+						log.Printf("Erro ao enviar notificação (%T) para %s: %v", ntf, feature.ID, err)
+					}
 				}
 			}
 		}
