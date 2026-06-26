@@ -16,3 +16,6 @@ Thumbs.db
 
 # Scratch files
 scratch/
+
+# Variáveis de ambiente sensíveis (tokens, senhas)
+.env
