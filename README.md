@@ -1,9 +1,9 @@
-# <img src="assets/mascot.png" alt="Mascote Sismo" width="48" align="center"> Sismo - Monitoramento Global e Alertas Rápidos de Terremotos
+# Sismo - Monitoramento Global e Alertas Rápidos de Terremotos
 
 O **Sismo** é uma plataforma desenvolvida para monitorar a atividade sísmica mundial e publicar alertas automáticos e ricos em informação, com alta velocidade, em um canal público do Telegram.
 
 <p align="center">
-  <img src="assets/alert_example.jpg" alt="Exemplo de Alerta no Telegram" width="400">
+  <img src="assets/cover.png" alt="Sismo Mascot" width="500">
 </p>
 
 ---
@@ -25,6 +25,10 @@ Oferecer informações ágeis, precisas e acessíveis sobre tremores de terra gl
 ### 2. Publicação Rica em Detalhes no Canal do Telegram
 - Cada alerta publicado inclui local, magnitude (com tipo), data/hora, coordenadas, profundidade, alerta PAGER, significância, relatos "Did You Feel It?" da USGS, intensidade estimada (MMI), métricas de qualidade da leitura (estações, lacuna, resíduo) e status de revisão.
 - Eventos com risco de tsunami recebem um destaque visual especial na mensagem.
+
+<p align="center">
+  <img src="assets/alert_example.jpg" alt="Exemplo de Alerta no Telegram" width="350">
+</p>
 
 ### 3. Visualizações Geográficas Dinâmicas (Mapas)
 - **Visualização Direta no Telegram**: toda notificação anexa automaticamente um mapa estático da área do epicentro com um marcador vermelho no centro, gerado via **Yandex Static Maps API**.
