@@ -2,6 +2,10 @@
 
 O **Sismo** é uma plataforma desenvolvida para monitorar a atividade sísmica mundial e publicar alertas automáticos e ricos em informação, com alta velocidade, em um canal público do Telegram.
 
+<p align="center">
+  <img src="assets/alert_example.jpg" alt="Exemplo de Alerta no Telegram" width="400">
+</p>
+
 ---
 
 ## Objetivo do Projeto
