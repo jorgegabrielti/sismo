@@ -4,13 +4,13 @@ O **Sismo** é uma plataforma desenvolvida para monitorar a atividade sísmica m
 
 ---
 
-## 🎯 Objetivo do Projeto
+## Objetivo do Projeto
 
 Oferecer informações ágeis, precisas e acessíveis sobre tremores de terra globais, integrando continuamente os dados oficiais da USGS e republicando-os de forma clara e visual para qualquer pessoa inscrita no canal.
 
 ---
 
-## 🚀 Principais Funcionalidades
+## Principais Funcionalidades
 
 ### 1. Alertas Globais Filtrados
 - Integração contínua com a API do **USGS (United States Geological Survey)**.
@@ -32,7 +32,7 @@ Oferecer informações ágeis, precisas e acessíveis sobre tremores de terra gl
 
 ---
 
-## 🏗️ Arquitetura do Sistema
+## Arquitetura do Sistema
 
 O projeto é escrito em **Go** e estruturado segundo boas práticas de modularização:
 - **`cmd/monitor`**: ponto de entrada do executável principal do monitoramento.
