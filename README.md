@@ -18,9 +18,9 @@ Oferecer informações ágeis, precisas e acessíveis sobre tremores de terra gl
 
 ### 1. Alertas Globais Filtrados
 - Integração contínua com a API do **USGS (United States Geological Survey)**.
-- Monitoramento de escala global (bounding box configurável, padrão cobre todo o planeta).
-- Alerta automático para eventos acima de uma magnitude mínima configurável.
-- Deduplicação por cache em memória (24h) para evitar alertas repetidos do mesmo evento.
+- Monitoramento contínuo em escala global.
+- Alerta automático para eventos de magnitude relevante (acima de 4.5).
+- Deduplicação por cache em memória para evitar alertas repetidos do mesmo evento.
 
 ### 2. Publicação Rica em Detalhes no Canal do Telegram
 - Cada alerta publicado inclui local, magnitude (com tipo), data/hora, coordenadas, profundidade, alerta PAGER, significância, relatos "Did You Feel It?" da USGS, intensidade estimada (MMI), métricas de qualidade da leitura (estações, lacuna, resíduo) e status de revisão.
