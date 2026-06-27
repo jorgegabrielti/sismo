@@ -1,4 +1,4 @@
-# Sismo - Monitoramento Global e Alertas Rápidos de Terremotos
+# <img src="assets/mascot.png" alt="Mascote Sismo" width="48" align="center"> Sismo - Monitoramento Global e Alertas Rápidos de Terremotos
 
 O **Sismo** é uma plataforma desenvolvida para monitorar a atividade sísmica mundial e publicar alertas automáticos e ricos em informação, com alta velocidade, em um canal público do Telegram.
 
