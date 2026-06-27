@@ -14,6 +14,7 @@ func TestFilterEvaluate(t *testing.T) {
 		MaxLatitude:  12.5,
 		MinLongitude: -73.5,
 		MaxLongitude: -59.5,
+		MaxAge:       15 * time.Minute,
 	}
 
 	f := NewFilter(cfg)
@@ -46,6 +47,7 @@ func TestFilterEvaluate(t *testing.T) {
 		Properties: usgs.Properties{
 			Mag:   3.5,
 			Place: "Offshore Venezuela",
+			Time:  time.Now().UnixNano() / 1e6,
 		},
 		Geometry: usgs.Geometry{
 			Coordinates: []float64{-65.0, 10.0, 10.0},
@@ -61,6 +63,7 @@ func TestFilterEvaluate(t *testing.T) {
 		Properties: usgs.Properties{
 			Mag:   6.0,
 			Place: "Japan",
+			Time:  time.Now().UnixNano() / 1e6,
 		},
 		Geometry: usgs.Geometry{
 			Coordinates: []float64{138.0, 36.0, 10.0},
@@ -69,11 +72,28 @@ func TestFilterEvaluate(t *testing.T) {
 	if f.Evaluate(outOfBoundsFeature) {
 		t.Error("Expected outOfBoundsFeature to fail due to location, but it passed")
 	}
+
+	// Case 5: Event older than MaxAge
+	oldFeature := usgs.Feature{
+		ID: "event4",
+		Properties: usgs.Properties{
+			Mag:   6.0,
+			Place: "Offshore Venezuela",
+			Time:  (time.Now().Add(-16 * time.Minute).UnixNano()) / 1e6,
+		},
+		Geometry: usgs.Geometry{
+			Coordinates: []float64{-65.0, 10.0, 10.0},
+		},
+	}
+	if f.Evaluate(oldFeature) {
+		t.Error("Expected oldFeature to fail due to age (MaxAge), but it passed")
+	}
 }
 
 func TestCleanCache(t *testing.T) {
 	cfg := &config.Config{
 		MinMagnitude: 4.5,
+		MaxAge:       15 * time.Minute,
 	}
 	f := NewFilter(cfg)
 

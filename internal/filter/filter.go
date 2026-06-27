@@ -54,6 +54,14 @@ func (f *Filter) Evaluate(feature usgs.Feature) bool {
 		return false
 	}
 
+	// 4. Validar idade do sismo (evita enviar alertas antigos ao iniciar/reiniciar o monitor)
+	eventTime := time.Unix(feature.Properties.Time/1000, 0)
+	if time.Since(eventTime) > f.cfg.MaxAge {
+		// Adiciona ao cache para evitar reprocessamento de buscas futuras, mas não notifica
+		f.seenCache[feature.ID] = time.Now()
+		return false
+	}
+
 	// Salva no cache com o timestamp atual
 	f.seenCache[feature.ID] = time.Now()
 	return true

@@ -20,6 +20,7 @@ type Config struct {
 	// Configurações do Telegram
 	TelegramToken     string
 	TelegramChannelID string // ID ou @username do canal público (ex: @sismo_alertas)
+	MaxAge            time.Duration
 }
 
 // Load carrega as configurações do ambiente ou define valores padrão
@@ -37,6 +38,7 @@ func Load() *Config {
 		// Configurações do canal do Telegram
 		TelegramToken:     getEnv("TELEGRAM_BOT_TOKEN", ""),
 		TelegramChannelID: getEnv("TELEGRAM_CHANNEL_ID", ""),
+		MaxAge:            getEnvDuration("MAX_AGE", 15*time.Minute),
 	}
 }
 
