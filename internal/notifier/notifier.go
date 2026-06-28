@@ -22,7 +22,7 @@ func NewConsoleNotifier() *ConsoleNotifier {
 // Notify formata e exibe o alerta do terremoto no console
 func (c *ConsoleNotifier) Notify(feature usgs.Feature) error {
 	// A API da USGS retorna o tempo em milissegundos
-	tm := time.Unix(feature.Properties.Time/1000, 0)
+	tm := time.Unix(feature.Properties.Time/1000, 0).UTC()
 
 	lon := 0.0
 	lat := 0.0

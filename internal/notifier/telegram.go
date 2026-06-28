@@ -80,7 +80,7 @@ func (t *TelegramNotifier) StartDispatcher(ctx context.Context) {
 
 // Notify formata e enfileira o alerta de terremoto para publicação no canal
 func (t *TelegramNotifier) Notify(feature usgs.Feature) error {
-	tm := time.Unix(feature.Properties.Time/1000, 0)
+	tm := time.Unix(feature.Properties.Time/1000, 0).UTC()
 
 	lon, lat, depth := 0.0, 0.0, 0.0
 	if len(feature.Geometry.Coordinates) > 0 {

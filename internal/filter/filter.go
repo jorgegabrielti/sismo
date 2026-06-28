@@ -23,7 +23,7 @@ func NewFilter(cfg *config.Config) *Filter {
 }
 
 // Evaluate verifica se o sismo atende aos critérios (magnitude, região) e se ainda não foi notificado
-func (f *Filter) Evaluate(feature usgs.Feature) bool {
+func (f *Filter) Evaluate(feature usgs.Feature, isStartup bool) bool {
 	// 1. Validar magniture
 	if feature.Properties.Mag < f.cfg.MinMagnitude {
 		return false
@@ -54,16 +54,13 @@ func (f *Filter) Evaluate(feature usgs.Feature) bool {
 		return false
 	}
 
-	// 4. Validar idade do sismo (evita enviar alertas antigos ao iniciar/reiniciar o monitor)
-	eventTime := time.Unix(feature.Properties.Time/1000, 0)
-	if time.Since(eventTime) > f.cfg.MaxAge {
-		// Adiciona ao cache para evitar reprocessamento de buscas futuras, mas não notifica
-		f.seenCache[feature.ID] = time.Now()
-		return false
-	}
-
 	// Salva no cache com o timestamp atual
 	f.seenCache[feature.ID] = time.Now()
+
+	if isStartup {
+		// Na inicialização, apenas populamos o cache de vistos em silêncio
+		return false
+	}
 	return true
 }
 

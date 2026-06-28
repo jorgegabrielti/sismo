@@ -14,7 +14,6 @@ func TestFilterEvaluate(t *testing.T) {
 		MaxLatitude:  12.5,
 		MinLongitude: -73.5,
 		MaxLongitude: -59.5,
-		MaxAge:       15 * time.Minute,
 	}
 
 	f := NewFilter(cfg)
@@ -32,12 +31,12 @@ func TestFilterEvaluate(t *testing.T) {
 		},
 	}
 
-	if !f.Evaluate(matchingFeature) {
+	if !f.Evaluate(matchingFeature, false) {
 		t.Error("Expected matchingFeature to pass filter, but it failed")
 	}
 
 	// Case 2: Deduplication - same event should be filtered out
-	if f.Evaluate(matchingFeature) {
+	if f.Evaluate(matchingFeature, false) {
 		t.Error("Expected matchingFeature to be deduplicated, but it passed")
 	}
 
@@ -53,7 +52,7 @@ func TestFilterEvaluate(t *testing.T) {
 			Coordinates: []float64{-65.0, 10.0, 10.0},
 		},
 	}
-	if f.Evaluate(lowMagFeature) {
+	if f.Evaluate(lowMagFeature, false) {
 		t.Error("Expected lowMagFeature to fail due to low magnitude, but it passed")
 	}
 
@@ -69,31 +68,35 @@ func TestFilterEvaluate(t *testing.T) {
 			Coordinates: []float64{138.0, 36.0, 10.0},
 		},
 	}
-	if f.Evaluate(outOfBoundsFeature) {
+	if f.Evaluate(outOfBoundsFeature, false) {
 		t.Error("Expected outOfBoundsFeature to fail due to location, but it passed")
 	}
 
-	// Case 5: Event older than MaxAge
-	oldFeature := usgs.Feature{
+	// Case 5: Startup run (isStartup = true) should populate cache but return false (no notification)
+	startupFeature := usgs.Feature{
 		ID: "event4",
 		Properties: usgs.Properties{
 			Mag:   6.0,
 			Place: "Offshore Venezuela",
-			Time:  (time.Now().Add(-16 * time.Minute).UnixNano()) / 1e6,
+			Time:  time.Now().UnixNano() / 1e6,
 		},
 		Geometry: usgs.Geometry{
 			Coordinates: []float64{-65.0, 10.0, 10.0},
 		},
 	}
-	if f.Evaluate(oldFeature) {
-		t.Error("Expected oldFeature to fail due to age (MaxAge), but it passed")
+	if f.Evaluate(startupFeature, true) {
+		t.Error("Expected startupFeature to return false during startup, but it returned true")
+	}
+
+	// Verify that startupFeature is now in the cache (and will be deduplicated on normal run)
+	if f.Evaluate(startupFeature, false) {
+		t.Error("Expected startupFeature to be deduplicated on subsequent run, but it passed")
 	}
 }
 
 func TestCleanCache(t *testing.T) {
 	cfg := &config.Config{
 		MinMagnitude: 4.5,
-		MaxAge:       15 * time.Minute,
 	}
 	f := NewFilter(cfg)
 

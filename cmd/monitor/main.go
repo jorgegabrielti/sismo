@@ -63,7 +63,7 @@ func main() {
 	defer ticker.Stop()
 
 	// Função auxiliar para executar um ciclo completo de monitoramento
-	runCycle := func() {
+	runCycle := func(isStartup bool) {
 		log.Println("Buscando terremotos recentes da USGS...")
 		feed, err := client.Fetch()
 		if err != nil {
@@ -73,7 +73,7 @@ func main() {
 
 		notifiedCount := 0
 		for _, feature := range feed.Features {
-			if flt.Evaluate(feature) {
+			if flt.Evaluate(feature, isStartup) {
 				notifiedCount++
 				for _, ntf := range notifiers {
 					if err := ntf.Notify(feature); err != nil {
@@ -95,12 +95,12 @@ func main() {
 
 	log.Println("Iniciando monitoramento de terremotos...")
 	// Executa busca inicial imediata
-	runCycle()
+	runCycle(true)
 
 	for {
 		select {
 		case <-ticker.C:
-			runCycle()
+			runCycle(false)
 		case sig := <-sigChan:
 			log.Printf("Sinal de terminação recebido (%v). Encerrando monitor de forma limpa...", sig)
 			cancel()
